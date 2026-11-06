@@ -1,5 +1,4 @@
-// 복사본: 원본은 SVartSoft cloud/config.js, 커밋 262b339. 이 레포에서 고치지 말 것.
-
+// 복사본: 원본은 SVartSoft cloud/config.js, 커밋 262b339663fb8c1b6aa8430ed6b516cc2cefe419. 이 레포에서 고치지 말 것.
 /**
  * 청각 다변기 (Sound Variator) - 클라우드 설정
  *
@@ -14,12 +13,12 @@ window.CloudConfig = {
   // Firebase 웹 앱 설정 (Firebase 콘솔 → 프로젝트 설정 → 앱 → 웹 앱 → SDK 설정에서 복사)
   // 아직 미입력. SETUP.md 참고
   FIREBASE_CONFIG: {
-    apiKey: '',
-    authDomain: '',
-    projectId: '',
-    storageBucket: '',
-    messagingSenderId: '',
-    appId: ''
+    apiKey: 'AIzaSyBAyuRkGF7eGJBcTRk4KbB10w24OEROEQY',
+    authDomain: 'svart-tower.firebaseapp.com',
+    projectId: 'svart-tower',
+    storageBucket: 'svart-tower.firebasestorage.app',
+    messagingSenderId: '457275593765',
+    appId: '1:457275593765:web:e8e470884bc58ff20edbcc'
   },
 
   // 클라우드 연결 여부. false면 send.js가 아무것도 보내지 않음

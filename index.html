@@ -969,6 +969,10 @@ class Snail {
 // ============================================================
 // 디버그
 // ============================================================
+function initDebug() {
+  // 디버그 패널은 D 키로 토글 — 별도 초기화 없음
+}
+
 function toggleDebug() {
   debugMode = !debugMode;
   document.getElementById('debug-panel').classList.toggle('visible', debugMode);
