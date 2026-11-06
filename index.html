@@ -1,0 +1,1050 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>청감 타워</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: #04050a; overflow: hidden;
+    position: fixed; inset: 0; cursor: none;
+    font-family: 'Noto Sans KR', system-ui, sans-serif;
+  }
+  canvas { display: block; }
+  #qr-corner {
+    position: fixed; right: 24px; bottom: 72px;
+    width: 100px; height: 100px;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0.7;
+  }
+  #debug-panel {
+    display: none;
+    position: fixed; top: 12px; right: 12px;
+    background: rgba(0,0,0,0.85); color: #7a7e96;
+    font: 11px/1.6 'IBM Plex Mono', monospace;
+    padding: 10px 14px; border-radius: 6px; min-width: 220px;
+    white-space: pre; z-index: 100;
+  }
+  #debug-panel.visible { display: block; }
+</style>
+</head>
+<body>
+<div id="qr-corner"></div>
+<div id="debug-panel"></div>
+
+<!-- 의존성: 순서 중요 -->
+<script src="lib/p5.min.js"></script>
+<script src="cloud/config.js"></script>
+<script src="cloud/firebase.js"></script>
+<script src="cloud/feed.js"></script>
+<script src="mapping.js"></script>
+<script>
+'use strict';
+
+// ============================================================
+// 설정 (config.js의 CloudConfig와 별도로 타워 전용 값)
+// ============================================================
+const ON_STAGE      = 32;      // 무대 최대 마리 수 (임시, Claude가 정함)
+const POOL_MAX      = 500;     // 대기 풀 최대 크기
+const ROTATE_EVERY  = 20000;   // 무대 교체 간격 ms (임시, Claude가 정함)
+const CARD_EVERY    = 7000;    // 카드 순환 간격 ms (임시, Claude가 정함)
+const ARRIVE_QUEUE_GAP = 2000; // 여러 마리가 한꺼번에 올 때 간격 ms
+const ARRIVE_CLIMB_MS  = 2000; // 올라오는 시간
+const ARRIVE_GROW_MS   = 3000; // 커졌다 돌아오는 시간
+const CARD_ARRIVE_HOLD = 10000;// 도착 뒤 카드 고정 시간 ms
+const BURNIN_INTERVAL  = 2 * 60 * 1000; // 번인 방지 이동 간격 ms
+const BURNIN_DRIFT     = 3;    // 번인 방지 최대 이동 픽셀
+
+const RELOAD_HOUR = 5; // 새벽 5시 새로고침
+
+// 참조 코드에서 그대로 가져온 값
+const SEG   = 26;
+const SUB   = 3;
+const SPEED = 0.8;
+const TURNS = 2.6;
+const TILT  = 0.36;
+const LEAF_STEP  = 0.3;
+const SNAIL_BASE = 0.62;
+const GLOW_FADE  = 34;
+const GLOW_ALPHA = 26;
+const GRID  = 16;
+const BG    = [4, 5, 10];
+
+const LEAF_RAMP   = [[168, 176, 193], [124, 160, 186], [196, 184, 176], [128, 142, 48], [92, 106, 54]];
+const GROUND_RAMP = [[177, 158, 107], [128, 142, 48], [92, 106, 54], [140, 114, 86], [168, 118, 92]];
+const SKY_RAMP    = [[151, 138, 135], [196, 184, 176], [168, 176, 193], [124, 160, 186], [108, 154, 209]];
+const BONES = { LOW: { rung: 3.2, bead: 4.6 }, MID: { rung: 1.8, bead: 3.0 }, HIGH: { rung: 0.8, bead: 1.7 } };
+
+// ============================================================
+// 상태
+// ============================================================
+let stage   = [];    // 무대 위 Snail 목록 (최대 ON_STAGE)
+let pool    = [];    // 대기 풀 (ear 객체, 최근 POOL_MAX개)
+let totalCount = 0;
+let cardTarget = null;    // 지금 카드에 올린 Snail
+let cardTimer  = 0;
+let cardArriveLock = 0;   // 도착 카드 고정 해제 시각
+let arriveQueue = [];     // { ear, enqueued } 도착 대기열
+let rotateTimer = 0;
+let debugMode = false;
+let burnin = { x: 0, y: 0, nextAt: 0 };
+
+let glow, gridLayer;
+let particles = [];
+let _p5 = null;
+
+// ============================================================
+// p5 스케치
+// ============================================================
+new p5(function(p) {
+  _p5 = p;
+
+  p.setup = function() {
+    p.createCanvas(p.windowWidth, p.windowHeight);
+    p.pixelDensity(1);
+    buildLayers(p);
+    scheduleReload();
+    acquireWakeLock();
+    initFeed();
+    initQR();
+    initDebug();
+    scheduleRotate(p);
+  };
+
+  p.windowResized = function() {
+    p.resizeCanvas(p.windowWidth, p.windowHeight);
+    buildLayers(p);
+  };
+
+  p.keyPressed = function() {
+    if (p.key === 'f' || p.key === 'F') p.fullscreen(!p.fullscreen());
+    if (p.key === 'r' || p.key === 'R') resetAll(p);
+    if (p.key === 'd' || p.key === 'D') toggleDebug();
+  };
+
+  p.draw = function() {
+    const C = cochlea(p);
+    const now = p.millis();
+
+    // 도착 대기열 처리
+    processArriveQueue(p, now);
+
+    // 무대 교체 체크
+    if (now - rotateTimer > ROTATE_EVERY) {
+      rotateSingle(p);
+      rotateTimer = now;
+    }
+
+    // 카드 순환
+    if (now > cardArriveLock && now - cardTimer > CARD_EVERY) {
+      advanceCard();
+      cardTimer = now;
+    }
+
+    for (const sn of stage) sn.update(C, p);
+
+    // ── 그리기 ──
+    // 발광 레이어
+    glow.blendMode(p.BLEND);
+    glow.noStroke();
+    glow.fill(0, GLOW_FADE);
+    glow.rect(0, 0, p.width, p.height);
+    glow.blendMode(p.ADD);
+    for (const sn of stage) sn.drawGlow(glow, p);
+
+    p.blendMode(p.BLEND);
+    const bx = burnin.x, by = burnin.y;
+    p.image(gridLayer, bx, by);
+
+    // 깊이 순서 정렬
+    const items = [];
+    for (const lf of C.leaves) items.push({ kind: 'leaf', o: lf, front: lf.front, key: lf.key });
+    for (const sn of stage)    items.push({ kind: 'snail', o: sn, front: sn.front, key: sn.key });
+    const back  = items.filter(it => !it.front).sort((a, b) => a.key - b.key);
+    const front = items.filter(it =>  it.front).sort((a, b) => a.key - b.key);
+
+    drawItems(back, p);
+    drawColumn(C, p);
+    drawItems(front, p);
+
+    p.blendMode(p.ADD);
+    p.image(glow, 0, 0);
+    p.blendMode(p.BLEND);
+    drawParticles(p);
+
+    drawTonotopy(C, p, bx, by);
+    drawCard(p, bx, by);
+    drawFooter(p, bx, by);
+
+    // 번인 방지
+    if (now > burnin.nextAt) {
+      burnin.x += Math.round((Math.random() - 0.5) * BURNIN_DRIFT * 2);
+      burnin.y += Math.round((Math.random() - 0.5) * BURNIN_DRIFT * 2);
+      burnin.x = Math.max(-BURNIN_DRIFT, Math.min(BURNIN_DRIFT, burnin.x));
+      burnin.y = Math.max(-BURNIN_DRIFT, Math.min(BURNIN_DRIFT, burnin.y));
+      burnin.nextAt = now + BURNIN_INTERVAL;
+    }
+
+    updateDebug(p);
+  };
+});
+
+// ============================================================
+// 피드 초기화
+// ============================================================
+function initFeed() {
+  // 오프라인이거나 Firebase 실패 시 캐시에서 초기화
+  const cached = window.svartFeed?.getFeedCache?.() || [];
+  if (cached.length > 0) {
+    _onInitial(cached);
+  }
+
+  window.svartFeed.startFeed({
+    onInitial: _onInitial,
+    onArrive:  _onArrive,
+    onRemove:  _onRemove,
+    onCount:   _onCount
+  });
+}
+
+function _onInitial(list) {
+  // 이미 처리된 ID가 있으면 중복 방지
+  const existing = new Set([...stage.map(s => s.earId), ...pool.map(e => e.earId)]);
+  const fresh = list.filter(e => !existing.has(e.earId));
+  // 풀에 넣고 무대 채우기
+  pool = [...fresh, ...pool].slice(0, POOL_MAX);
+  while (stage.length < ON_STAGE && pool.length > 0) {
+    const ear = pool.shift();
+    _addToStage(ear, true, _p5);
+  }
+}
+
+function _onArrive(ear, { animate }) {
+  if (!animate) {
+    // 연출 없이 풀에만
+    pool.unshift(ear);
+    if (pool.length > POOL_MAX) pool.pop();
+    return;
+  }
+  // 도착 대기열에 추가
+  arriveQueue.push({ ear, enqueued: performance.now() });
+}
+
+function _onRemove(earId) {
+  // 무대에서 즉시 제거
+  const idx = stage.findIndex(s => s.earId === earId);
+  if (idx >= 0) {
+    stage.splice(idx, 1);
+    if (cardTarget?.earId === earId) {
+      cardTarget = null;
+      cardTimer = 0;
+    }
+    // 풀에서 하나 무대에 올리기
+    _fillStage(_p5);
+  }
+  // 풀에서도 제거
+  pool = pool.filter(e => e.earId !== earId);
+}
+
+function _onCount(total) {
+  totalCount = total;
+}
+
+// ============================================================
+// 무대 관리
+// ============================================================
+function _addToStage(ear, atHome, p) {
+  if (!p) return;
+  const pf = window.TowerMapping.mapProfile(ear.profile);
+  const sn = new Snail(pf, ear, atHome, p);
+  stage.push(sn);
+}
+
+function _fillStage(p) {
+  while (stage.length < ON_STAGE && pool.length > 0) {
+    const ear = pool.shift();
+    _addToStage(ear, true, p);
+  }
+}
+
+function processArriveQueue(p, now) {
+  if (arriveQueue.length === 0) return;
+
+  // 가장 먼저 큐에 들어온 것만 처리 (2초 간격)
+  const item = arriveQueue[0];
+  const elapsed = performance.now() - item.enqueued;
+  if (elapsed < 0) { arriveQueue.shift(); return; } // 이미 처리됨
+
+  arriveQueue.shift();
+
+  // 무대가 꽉 차면 가장 오래된 것 퇴장
+  if (stage.length >= ON_STAGE) {
+    const oldest = stage.shift();
+    if (oldest && cardTarget?.earId === oldest.earId) {
+      cardTarget = null;
+    }
+  }
+
+  // 무대에 추가 (입구에서 올라오는 연출)
+  _addToStage(item.ear, false, p);
+  const newSn = stage[stage.length - 1];
+  if (newSn) {
+    newSn.arriving = true;
+    newSn.arriveStart = p.millis();
+    // 카드 고정
+    cardTarget = newSn;
+    cardArriveLock = p.millis() + CARD_ARRIVE_HOLD;
+    cardTimer = p.millis();
+  }
+
+  // 다음 대기열 처리는 2초 뒤
+  if (arriveQueue.length > 0) {
+    const next = arriveQueue[0];
+    next.enqueued = performance.now() + ARRIVE_QUEUE_GAP;
+  }
+}
+
+function rotateSingle(p) {
+  if (stage.length === 0 || pool.length === 0) return;
+  // 가장 오래 무대에 있던 1마리 퇴장
+  const departed = stage.shift();
+  if (departed && cardTarget?.earId === departed.earId) {
+    cardTarget = null;
+    cardTimer = 0;
+  }
+  // 풀에서 아직 안 나온 1마리 입장
+  const ear = pool.shift();
+  _addToStage(ear, true, p);
+}
+
+function scheduleRotate(p) {
+  rotateTimer = p.millis();
+}
+
+function resetAll(p) {
+  stage = [];
+  pool = [];
+  particles = [];
+  cardTarget = null;
+  arriveQueue = [];
+  buildLayers(p);
+}
+
+// ============================================================
+// 카드 순환
+// ============================================================
+function advanceCard() {
+  if (stage.length === 0) { cardTarget = null; return; }
+  if (stage.length === 1) { cardTarget = stage[0]; return; }
+  // 같은 달팽이가 연달아 나오지 않게
+  const others = stage.filter(s => s !== cardTarget);
+  cardTarget = others[Math.floor(Math.random() * others.length)];
+}
+
+// ============================================================
+// 달팽이관 형상 (참조 코드 그대로)
+// ============================================================
+function cochlea(p) {
+  const S_MAX = TURNS * p.TWO_PI;
+  const cx = p.width / 2;
+  const baseY = p.height * 0.84;
+  const R0 = p.min(p.width * 0.36, p.height * 0.46);
+  const H  = p.height * 0.6;
+  const rot = p.millis() / 1000 * 0.02;
+  const geo = {
+    S_MAX, cx, baseY, R0, H, rot,
+    r: s => R0 * (1 - 0.74 * (s / S_MAX)),
+    z: s => H * Math.pow(s / S_MAX, 0.92)
+  };
+  geo.proj = (s, rk = 1, dz = 0) => {
+    const a = s + rot;
+    const r = geo.r(s) * rk;
+    return { x: cx + p.cos(a) * r, y: baseY - geo.z(s) - dz + p.sin(a) * r * TILT, depth: p.sin(a) };
+  };
+  geo.leaves = makeLeaves(geo, p);
+  return geo;
+}
+
+function makeLeaves(C, p) {
+  const out = [];
+  const light = -2.3;
+  for (let s = 0.15; s < C.S_MAX - 0.2; s += LEAF_STEP * (0.75 + 0.25 * (1 - s / C.S_MAX))) {
+    const u = s / C.S_MAX;
+    const a = s + C.rot;
+    const r = C.r(s);
+    const rIn = r * 0.5, rOut = r * 1.02;
+    const half = r * 0.2;
+    const sway = p.sin(p.millis() / 1300 + s * 2) * 0.03;
+    const pts = [], vein = [];
+    const side = sign => {
+      for (let k = 0; k <= 10; k++) {
+        const v = sign > 0 ? k / 10 : 1 - k / 10;
+        const rv = p.lerp(rIn, rOut, v);
+        const w = half * Math.pow(p.sin(p.PI * v), 0.75) * (v < 0.5 ? 0.9 : 1);
+        const av = a + v * 0.32 + sway + sign * (w / rv);
+        const z = C.z(s) - v * r * 0.06;
+        pts.push({ x: C.cx + p.cos(av) * rv, y: C.baseY - z + p.sin(av) * rv * TILT });
+      }
+    };
+    side(1); side(-1);
+    for (let k = 0; k <= 8; k++) {
+      const v = k / 8, rv = p.lerp(rIn, rOut, v), av = a + v * 0.32 + sway;
+      vein.push({ x: C.cx + p.cos(av) * rv, y: C.baseY - (C.z(s) - v * r * 0.06) + p.sin(av) * rv * TILT });
+    }
+    const facing = 0.72 + 0.28 * p.cos(a - light);
+    const depthK = p.sin(a) < 0 ? 0.5 + 0.2 * (1 + p.sin(a)) : 0.85 + 0.15 * p.sin(a);
+    const col = rampColor(LEAF_RAMP, u).map(c => c * facing * depthK);
+    out.push({
+      pts, vein, col,
+      front: p.sin(a) >= 0,
+      key:   p.sin(a) * r + (p.sin(a) >= 0 ? -C.z(s) * 0.4 : C.z(s) * 0.4),
+      alpha: p.sin(a) < 0 ? 0.75 : 0.93
+    });
+  }
+  return out;
+}
+
+// ============================================================
+// 그리기 헬퍼
+// ============================================================
+function drawItems(list, p) {
+  for (const it of list) {
+    if (it.kind === 'leaf') {
+      drawLeaf(it.o, p);
+    } else {
+      p.drawingContext.globalAlpha = it.o.alpha;
+      const isCard = (it.o === cardTarget);
+      it.o.draw(isCard, p);
+      p.drawingContext.globalAlpha = 1;
+    }
+  }
+}
+
+function drawLeaf(lf, p) {
+  p.noStroke();
+  p.fill(lf.col[0], lf.col[1], lf.col[2], 255 * lf.alpha);
+  p.beginShape();
+  for (const pt of lf.pts) p.vertex(pt.x, pt.y);
+  p.endShape(p.CLOSE);
+  p.noFill();
+  p.stroke(Math.min(255, lf.col[0] * 1.35), Math.min(255, lf.col[1] * 1.35), Math.min(255, lf.col[2] * 1.35), 150 * lf.alpha);
+  p.strokeWeight(1);
+  p.beginShape();
+  for (const pt of lf.pts) p.vertex(pt.x, pt.y);
+  p.endShape(p.CLOSE);
+  p.stroke(lf.col[0] * 0.55, lf.col[1] * 0.55, lf.col[2] * 0.55, 200 * lf.alpha);
+  p.strokeWeight(1.2);
+  for (let k = 0; k < lf.vein.length - 1; k++)
+    p.line(lf.vein[k].x, lf.vein[k].y, lf.vein[k + 1].x, lf.vein[k + 1].y);
+}
+
+function drawColumn(C, p) {
+  const top = C.proj(C.S_MAX - 0.2, 0);
+  const wB = C.R0 * 0.42, wT = C.R0 * 0.08;
+  p.noStroke(); p.fill(18, 20, 28, 235);
+  p.beginShape();
+  p.vertex(C.cx - wB, C.baseY); p.vertex(C.cx - wT, top.y);
+  p.vertex(C.cx + wT, top.y);  p.vertex(C.cx + wB, C.baseY);
+  p.endShape(p.CLOSE);
+  p.stroke(60, 64, 80, 120); p.strokeWeight(1);
+  for (let k = -3; k <= 3; k++)
+    p.line(C.cx + (k / 3) * wB * 0.8, C.baseY, C.cx + (k / 3) * wT * 0.8, top.y);
+}
+
+function drawTonotopy(C, p, bx, by) {
+  const b = C.proj(0.05, 1.08), t = C.proj(C.S_MAX - 0.3, 1.4);
+  p.noStroke(); p.fill(130, 134, 152);
+  p.textFont('Noto Sans KR, system-ui, sans-serif');
+  p.textSize(12);
+  p.textAlign(p.LEFT, p.CENTER);
+  p.text('20 kHz · 높은 소리', b.x + bx + 10, b.y + by);
+  p.textAlign(p.LEFT, p.BOTTOM);
+  p.text('20 Hz · 낮은 소리', t.x + bx + 20, t.y + by - 24);
+}
+
+// ============================================================
+// 정보 카드
+// ============================================================
+function drawCard(p, bx, by) {
+  if (!cardTarget) return;
+  const sn  = cardTarget;
+  const cfg = window.CloudConfig;
+  const ear = sn.ear;
+  const pf  = sn.pf;
+  const d   = pf._display || {};
+  const isArriving = sn.arriving && (p.millis() - sn.arriveStart < CARD_ARRIVE_HOLD);
+
+  const lines = [
+    ['청감 코드', ear.code || '—'],
+    ['볼륨 → 크기',      d.volDb],
+    ['음역 → 뼈 굵기',   d.register],
+    ['저음 → 색',        d.lowDb],
+    ['고음 → 색',        d.highDb],
+    ['최고 주파수 → 꼬임', d.maxFreqHz],
+    ['우세 귀 → 방향',   d.dominantEar],
+    ['중앙 → 점액 모양', d.centerImage],
+    ['바탕음 → 껍질',    d.pitchMode],
+  ];
+
+  // SHOW_NAMES가 true고 이름이 있으면 첫 줄에 추가
+  if (cfg.SHOW_NAMES && ear.name) {
+    // 금칙어 필터 (config.BANNED_WORDS)
+    let name = ear.name;
+    if (Array.isArray(cfg.BANNED_WORDS)) {
+      for (const w of cfg.BANNED_WORDS) {
+        name = name.replace(new RegExp(w, 'gi'), '*'.repeat(w.length));
+      }
+    }
+    lines.unshift(['이름', name.slice(0, cfg.NAME_MAX_LEN || 12)]);
+  }
+
+  const lh = 22, w = 260, h = lines.length * lh + 56;
+  let x = sn.shellPos.x + sn.R * 1.4 + bx;
+  let y = sn.shellPos.y - h / 2 + by;
+  if (x + w > p.width - 12) x = sn.shellPos.x - sn.R * 1.4 - w + bx;
+  x = p.constrain(x, 12, p.width - w - 12);
+  y = p.constrain(y, 12, p.height - h - 60);
+
+  // 카드 배경
+  p.noStroke(); p.fill(10, 12, 20, 235);
+  p.rect(x, y, w, h, 12);
+
+  // 하이라이트 링
+  p.noFill(); p.stroke(245, 245, 243, 100); p.strokeWeight(1.5);
+  p.circle(sn.shellPos.x + bx, sn.shellPos.y + by, sn.R * 2.6);
+
+  // 도착 표시
+  if (isArriving) {
+    p.noStroke(); p.fill(255, 80, 40, 220);
+    p.textFont('Noto Sans KR, system-ui, sans-serif');
+    p.textSize(10); p.textAlign(p.CENTER, p.TOP);
+    p.text('▶ 방금 도착', x + w / 2, y + 8);
+  }
+
+  // 그라데이션 띠
+  for (let k = 0; k < w - 32; k++) {
+    const c = gradAt(sn.stops, k / (w - 33));
+    p.fill(c[0], c[1], c[2]);
+    p.rect(x + 16 + k, y + (isArriving ? 24 : 16), 1.2, 6);
+  }
+
+  // 내용
+  p.textFont('Noto Sans KR, system-ui, sans-serif');
+  p.textSize(12);
+  lines.forEach(([label, val], i) => {
+    const yy = y + (isArriving ? 44 : 40) + i * lh;
+    p.textAlign(p.LEFT, p.CENTER); p.fill(112, 116, 138);
+    p.text(label, x + 16, yy);
+    p.textAlign(p.RIGHT, p.CENTER); p.fill(234, 236, 246);
+    p.text(val || '—', x + w - 16, yy);
+  });
+}
+
+// ============================================================
+// 하단 문구
+// ============================================================
+function drawFooter(p, bx, by) {
+  p.noStroke(); p.fill(112, 116, 138);
+  p.textFont('Noto Sans KR, system-ui, sans-serif');
+  p.textSize(13);
+  p.textAlign(p.LEFT, p.BOTTOM);
+  const countStr = totalCount > 0 ? `달팽이 ${totalCount}마리` : `달팽이 ${stage.length}마리`;
+  p.text('청감 타워 · ' + countStr, 20 + bx, p.height - 18 + by);
+  p.textAlign(p.RIGHT, p.BOTTOM);
+  p.text('모든 귀는 [ ] 이다', p.width - 20 + bx, p.height - 18 + by);
+}
+
+// ============================================================
+// 파티클
+// ============================================================
+function drawParticles(p) {
+  p.noStroke();
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const pt = particles[i];
+    pt.x += pt.vx; pt.y += pt.vy;
+    pt.vx *= 0.95; pt.vy *= 0.95;
+    pt.rot += pt.spin;
+    pt.life -= pt.decay;
+    if (pt.life <= 0) { particles.splice(i, 1); continue; }
+    const tw = 0.55 + 0.45 * p.sin(p.frameCount * 0.25 + pt.tw);
+    const a = 255 * pt.life * (pt.spin !== 0 ? tw : 1);
+    p.fill(pt.c[0], pt.c[1], pt.c[2], a);
+    p.push(); p.translate(pt.x, pt.y); p.rotate(pt.rot);
+    drawShape(pt.shape, pt.size * (0.6 + 0.4 * pt.life), p);
+    p.pop();
+  }
+  if (particles.length > 2500) particles.splice(0, particles.length - 2500);
+}
+
+function drawShape(shape, s, p) {
+  if (shape === 'dot') {
+    p.circle(0, 0, s * 0.8);
+  } else if (shape === 'star') {
+    p.beginShape();
+    for (let k = 0; k < 10; k++) {
+      const r = k % 2 === 0 ? s * 0.6 : s * 0.25;
+      const a = -p.HALF_PI + k * p.PI / 5;
+      p.vertex(p.cos(a) * r, p.sin(a) * r);
+    }
+    p.endShape(p.CLOSE);
+  } else if (shape === 'sparkle') {
+    p.beginShape();
+    for (let k = 0; k < 8; k++) {
+      const r = k % 2 === 0 ? s * 0.75 : s * 0.12;
+      const a = k * p.PI / 4;
+      p.vertex(p.cos(a) * r, p.sin(a) * r);
+    }
+    p.endShape(p.CLOSE);
+  } else if (shape === 'heart') {
+    p.beginShape();
+    for (let k = 0; k <= 24; k++) {
+      const a = (k / 24) * p.TWO_PI;
+      const hx = 16 * Math.pow(p.sin(a), 3);
+      const hy = -(13 * p.cos(a) - 5 * p.cos(2 * a) - 2 * p.cos(3 * a) - p.cos(4 * a));
+      p.vertex(hx * s * 0.035, hy * s * 0.035);
+    }
+    p.endShape(p.CLOSE);
+  }
+}
+
+// ============================================================
+// 배경 레이어 빌드
+// ============================================================
+function buildLayers(p) {
+  glow = p.createGraphics(p.width, p.height);
+  glow.pixelDensity(1);
+  glow.background(0);
+
+  gridLayer = p.createGraphics(p.width, p.height);
+  gridLayer.pixelDensity(1);
+  gridLayer.background(BG[0], BG[1], BG[2]);
+  gridLayer.noStroke(); gridLayer.fill(24);
+  for (let y = GRID / 2; y < p.height; y += GRID)
+    for (let x = GRID / 2; x < p.width; x += GRID)
+      gridLayer.circle(x, y, 2);
+}
+
+// ============================================================
+// 색 헬퍼 (참조 코드 그대로)
+// ============================================================
+function rampColor(ramp, t) {
+  t = Math.max(0, Math.min(1, t)) * (ramp.length - 1);
+  const i = Math.min(Math.floor(t), ramp.length - 2);
+  const f = t - i;
+  return ramp[i].map((c, k) => c + f * (ramp[i + 1][k] - c));
+}
+
+function gradAt(stops, t) {
+  const P = [0, 0.33, 0.67, 1];
+  t = Math.max(0, Math.min(1, t));
+  let i = 0;
+  while (i < 2 && t > P[i + 1]) i++;
+  let f = (t - P[i]) / (P[i + 1] - P[i]);
+  f = f * f * (3 - 2 * f);
+  return stops[i].map((v, j) => v + f * (stops[i + 1][j] - v));
+}
+
+// ============================================================
+// Snail 클래스 (참조 코드 기반, 도착 연출 추가)
+// ============================================================
+class Snail {
+  constructor(pf, ear, atHome, p) {
+    this.pf  = pf;
+    this.ear = ear;
+    this.earId = ear.earId;
+    this.p   = p;
+
+    // Part 1
+    this.vol  = p.map(pf.volDb, -40, 0, 0.55, 1.05, true);
+    this.bone = pf.bone || BONES.MID;
+    const tl = (pf.low + 10) / 20, th = (pf.high + 10) / 20;
+    this.stops = [
+      rampColor(GROUND_RAMP, tl - 0.2), rampColor(GROUND_RAMP, tl),
+      rampColor(SKY_RAMP, th), rampColor(SKY_RAMP, th + 0.2)
+    ];
+
+    // Part 2: 꼬임
+    this.period     = p.map(pf.maxFreqHz, 8000, 20000, 74, 26, true);
+    this.twistSpeed = p.map(pf.maxFreqHz, 8000, 20000, 0.012, 0.05, true);
+    this.chir       = pf.dominantEar === 'LEFT' ? -1 : 1;
+    this.alternating = false; // LEFT/RIGHT만 있으므로 항상 false
+
+    // Part 2: 점액
+    this.shape = pf.slimeShape || 'dot';
+    this.burst = pf.burst ?? false;
+
+    // 자기 잎
+    const pref  = Math.max(0.03, Math.min(0.97, (pf.high - pf.low + 20) / 40 + (Math.random() - 0.5) * 0.16));
+    this.home   = (1 - pref) * TURNS * p.TWO_PI * 0.9 + 0.3;
+    this.sPos   = atHome ? this.home + (Math.random() - 0.5) : 0.2;
+    this.dir    = Math.random() < 0.5 ? 1 : -1;
+    if (!atHome) this.dir = 1;
+
+    this.s = 0.5;
+    this._applyScale(1, p);
+    this.seed       = p.random(1000);
+    this.speed      = SPEED * p.random(0.7, 1.2);
+    this.twist      = p.random(p.TWO_PI);
+    this.head       = p.createVector(p.width / 2, p.height / 2);
+    this.vel        = p.createVector(1, 0);
+    this.spine      = null;
+    this.shellPos   = p.createVector(p.width / 2, p.height / 2);
+    this.alpha      = 1;
+    this.front      = true;
+    this.key        = 0;
+
+    // 도착 연출 상태
+    this.arriving   = false;
+    this.arriveStart = 0;
+    this.arriveScale = 1; // 커졌다 돌아오는 배율
+  }
+
+  _applyScale(k, p) {
+    this.s      = SNAIL_BASE * this.vol * k;
+    this.segLen = 10 * this.s;
+    this.bodyW  = 38 * this.s;
+    this.R      = 74 * this.s;
+  }
+
+  _resetSpine(p) {
+    this.spine = [];
+    const back = this.vel.copy().mult(-this.segLen);
+    for (let i = 0; i < SEG; i++)
+      this.spine.push(p5.Vector.add(this.head, p5.Vector.mult(back, i)));
+    this.shellPos = this.head.copy();
+  }
+
+  update(C, p) {
+    const now = p.millis();
+
+    // 도착 연출: 처음 2초는 빠르게 올라가고, 도착 후 3초 1.6배
+    let speedMult = 1;
+    if (this.arriving) {
+      const elapsed = now - this.arriveStart;
+      if (elapsed < ARRIVE_CLIMB_MS) {
+        // 빠르게 올라가기
+        speedMult = 4;
+        this.arriveScale = 1;
+      } else if (elapsed < ARRIVE_CLIMB_MS + ARRIVE_GROW_MS) {
+        // 커졌다 돌아오기
+        const t = (elapsed - ARRIVE_CLIMB_MS) / ARRIVE_GROW_MS;
+        this.arriveScale = 1 + 0.6 * Math.sin(t * Math.PI); // 1.6배 피크
+        speedMult = 0.3;
+      } else {
+        this.arriving   = false;
+        this.arriveScale = 1;
+      }
+    }
+
+    const far = Math.abs(this.sPos - this.home) > 0.9;
+    if (far) this.dir = this.sPos < this.home ? 1 : -1;
+    else if (Math.abs(this.sPos - this.home) > 0.6 && (this.sPos - this.home) * this.dir > 0)
+      this.dir *= -1;
+
+    const r = C.r(this.sPos);
+    const pulse = this.speed * (0.7 + 0.5 * (0.5 + 0.5 * p.sin((p.frameCount + this.seed) * 0.1))) * (far ? 2.6 : 1) * speedMult;
+    this.sPos = Math.max(0.1, Math.min(C.S_MAX - 0.3, this.sPos + (this.dir * pulse) / r));
+
+    this._applyScale(Math.pow(r / C.R0, 0.7) * this.arriveScale, p);
+    const pt  = C.proj(this.sPos, 0.8, 4);
+    const pt2 = C.proj(this.sPos + this.dir * 0.02, 0.8, 4);
+    this.head.set(pt.x, pt.y);
+    const v = p.createVector(pt2.x - pt.x, pt2.y - pt.y);
+    if (v.magSq() > 0) this.vel = v.normalize();
+    if (!this.spine) this._resetSpine(p);
+
+    this.spine[0].set(this.head);
+    for (let i = 1; i < SEG; i++) {
+      const d = p5.Vector.sub(this.spine[i], this.spine[i - 1]);
+      d.setMag(this.segLen);
+      this.spine[i] = p5.Vector.add(this.spine[i - 1], d);
+    }
+    this.twist += this.twistSpeed;
+    this.front = pt.depth >= 0;
+    this.alpha = this.front ? 1 : 0.42 + 0.3 * (1 + pt.depth);
+    this.key   = pt.depth * r + (this.front ? -C.z(this.sPos) * 0.4 : C.z(this.sPos) * 0.4) + 0.5;
+    this._build(p);
+    this._emit(p);
+  }
+
+  drawGlow(g, p) {
+    g.noFill();
+    const k = this.alpha;
+    g.strokeWeight(7 * this.s);
+    for (const [key, t] of [['a', 0.3], ['b', 0.75]]) {
+      const c = gradAt(this.stops, t);
+      g.stroke(c[0], c[1], c[2], GLOW_ALPHA * k);
+      g.beginShape();
+      for (let i = 0; i < this.body.length; i += 2) g.vertex(this.body[i][key].x, this.body[i][key].y);
+      g.endShape();
+    }
+    const c = gradAt(this.stops, 0.5);
+    g.stroke(c[0], c[1], c[2], GLOW_ALPHA * 0.8 * k);
+    g.strokeWeight(11 * this.s);
+    g.beginShape();
+    for (let i = 0; i < this.shell.length; i += 3)
+      g.vertex((this.shell[i].a.x + this.shell[i].b.x) / 2, (this.shell[i].a.y + this.shell[i].b.y) / 2);
+    g.endShape();
+    g.noStroke(); g.fill(c[0], c[1], c[2], 14 * k);
+    const h = this.frames[0];
+    for (let d = 34; d > 4; d -= 6) g.circle(h.p.x, h.p.y, d * this.s);
+  }
+
+  _emit(p) {
+    const tail  = this.spine[SEG - 1];
+    const every = this.burst ? 3 : 7;
+    if ((p.frameCount + Math.floor(this.seed)) % every !== 0) return;
+    const n = this.burst ? 2 : 1;
+    for (let k = 0; k < n; k++) {
+      const c = Math.random() < 0.25 ? [245, 245, 243] : this.stops[Math.floor(Math.random() * this.stops.length)];
+      const back = this.vel.copy().mult(-1);
+      const v = this.burst
+        ? p5.Vector.fromAngle(back.heading() + p.random(-1.2, 1.2)).mult(p.random(0.4, 1.6))
+        : p.createVector(0, 0);
+      particles.push({
+        x: tail.x + p.random(-3, 3) * this.s, y: tail.y + p.random(-3, 3) * this.s,
+        vx: v.x, vy: v.y,
+        life: 1, decay: this.burst ? p.random(0.008, 0.016) : 0.0035,
+        size: (this.burst ? p.random(4, 9) : p.random(3, 5)) * (0.6 + this.s * 0.6),
+        rot: p.random(p.TWO_PI), spin: this.burst ? p.random(-0.08, 0.08) : 0,
+        shape: this.shape, c, tw: p.random(p.TWO_PI)
+      });
+    }
+  }
+
+  _build(p) {
+    const travel = this.vel.x <= 0 ? 1 : -1;
+    const n0 = p.createVector(-this.vel.y, this.vel.x);
+    const upSide = n0.y > 0 ? -1 : 1;
+    const frames = [];
+    for (let i = 0; i < SEG; i++) {
+      const a  = this.spine[Math.max(0, i - 1)];
+      const b  = this.spine[Math.min(SEG - 1, i + 1)];
+      const tg = p5.Vector.sub(a, b).normalize();
+      const nr = p.createVector(-tg.y, tg.x).mult(upSide);
+      const u  = i / (SEG - 1);
+      let w = u < 0.12 ? p.sin((u / 0.12) * p.HALF_PI) : Math.pow(1 - (u - 0.12) / 0.88, 0.85);
+      w *= this.bodyW * (1 + 0.08 * p.sin((p.frameCount + this.seed) * 0.2 - u * 12));
+      frames.push({ p: this.spine[i], n: nr, w, u });
+    }
+    this.frames = frames;
+
+    const body = [];
+    let acc = 0, prev = null, ph = this.twist, lastR = -1e9;
+    for (let i = 0; i < SEG - 1; i++) {
+      for (let j = 0; j < SUB; j++) {
+        const q  = j / SUB;
+        const f0 = frames[i], f1 = frames[i + 1];
+        const pt = p5.Vector.lerp(f0.p, f1.p, q);
+        const n  = p5.Vector.lerp(f0.n, f1.n, q).normalize();
+        const w  = p.lerp(f0.w, f1.w, q), u = p.lerp(f0.u, f1.u, q);
+        const ds = prev ? p5.Vector.dist(pt, prev) : 0;
+        prev = pt; acc += ds;
+        ph += this.chir * ds * p.TWO_PI / (this.period * this.s);
+        const node = this._node(pt.x + n.x * w * 0.15, pt.y + n.y * w * 0.15,
+          Math.atan2(n.y, n.x), 0.7 * w, ph, 1 - u * 0.55, 0.45 + 0.55 * (1 - u));
+        node.rung = acc - lastR >= 7.5 * this.s && w > 3 * this.s && u < 0.96;
+        if (node.rung) lastR = acc;
+        body.push(node);
+      }
+    }
+    this.body = body;
+
+    const fr = frames[Math.floor(SEG * 0.4)];
+    const R  = this.R * (1 + 0.03 * p.sin((p.frameCount + this.seed) * 0.05));
+    const target = p.createVector(fr.p.x + fr.n.x * (fr.w * 0.7 + R * 0.8), fr.p.y + fr.n.y * (fr.w * 0.7 + R * 0.8));
+    this.shellPos.lerp(target, 0.25);
+    const cx = this.shellPos.x, cy = this.shellPos.y;
+    const sg = travel * this.chir;
+    const rot = sg > 0 ? 0.4 : p.PI - 0.4;
+    const T  = 2.9 * p.TWO_PI;
+    const bb = Math.log(R / (4 * this.s)) / T;
+    const shell = [];
+    let sacc = 0, sprev = null, slast = 0;
+    const twistK = 46 / this.period;
+    for (let th = 1.3; th <= T; th += 0.075) {
+      const r  = R * Math.exp(bb * (th - T));
+      const k  = r / R;
+      const ang = sg * th + rot;
+      const c  = { x: cx + Math.cos(ang) * r, y: cy + Math.sin(ang) * r };
+      if (sprev) sacc += Math.hypot(c.x - sprev.x, c.y - sprev.y);
+      sprev = c;
+      const node = this._node(c.x, c.y, ang, 0.16 * r,
+        this.twist * 0.8 + this.chir * th * 4.2 * twistK, 0.35 + 0.65 * k, 0.45 * k);
+      node.rung = k > 0.14 && sacc - slast >= 7.5 * this.s * (0.5 + 0.5 * k);
+      if (node.rung) slast = sacc;
+      shell.push(node);
+    }
+    this.shell = shell;
+  }
+
+  _node(x, y, ang, amp, ph, sc, t) {
+    const s = Math.sin(ph), c = Math.cos(ph);
+    const nx = Math.cos(ang), ny = Math.sin(ang);
+    return {
+      a: { x: x + nx * amp * s, y: y + ny * amp * s },
+      b: { x: x - nx * amp * s, y: y - ny * amp * s },
+      da: c, db: -c, sc,
+      col: gradAt(this.stops, t), colB: gradAt(this.stops, t + 0.08)
+    };
+  }
+
+  draw(hi, p) {
+    p.strokeCap(p.ROUND);
+    this._group(this.body, hi, p);
+    p.noStroke(); p.fill(BG[0], BG[1], BG[2], 225);
+    p.circle(this.shellPos.x, this.shellPos.y, this.R * 2.1);
+    this._group(this.shell, hi, p);
+    this._eyes(p);
+    if (hi) {
+      p.noFill(); p.stroke(245, 245, 243, 120); p.strokeWeight(1);
+      p.circle(this.shellPos.x, this.shellPos.y, this.R * 2.5);
+    }
+  }
+
+  _group(arr, hi, p) {
+    this._strands(arr, false, hi, p);
+    this._bones(arr, p);
+    this._strands(arr, true, hi, p);
+  }
+
+  _strands(arr, front, hi, p) {
+    const base = 2.6 * this.s;
+    for (const key of ['a', 'b']) {
+      const dk = key === 'a' ? 'da' : 'db', ck = key === 'a' ? 'col' : 'colB';
+      const passes = front ? [[3, hi ? 70 : 40], [1, 255]] : [[0.6, 220]];
+      for (const [wm, al] of passes) {
+        for (let i = 0; i < arr.length - 1; i++) {
+          const d = (arr[i][dk] + arr[i + 1][dk]) * 0.5;
+          if ((d >= 0) !== front) continue;
+          const c = arr[i][ck], dim = front ? 1 : 0.4;
+          p.stroke(c[0] * dim, c[1] * dim, c[2] * dim, al);
+          p.strokeWeight(Math.max(0.6, base * arr[i].sc * wm));
+          p.line(arr[i][key].x, arr[i][key].y, arr[i + 1][key].x, arr[i + 1][key].y);
+        }
+      }
+    }
+  }
+
+  _bones(arr, p) {
+    for (const pt of arr) {
+      if (!pt.rung) continue;
+      const s = this.s * pt.sc;
+      p.stroke(245, 245, 243); p.strokeWeight(Math.max(0.5, this.bone.rung * s));
+      p.line(pt.a.x, pt.a.y, pt.b.x, pt.b.y);
+      p.noStroke(); p.fill(245, 245, 243);
+      p.circle(pt.a.x, pt.a.y, 2 * this.bone.bead * s * (0.55 + 0.45 * (pt.da * 0.5 + 0.5)));
+      p.circle(pt.b.x, pt.b.y, 2 * this.bone.bead * s * (0.55 + 0.45 * (pt.db * 0.5 + 0.5)));
+    }
+  }
+
+  _eyes(p) {
+    const h   = this.frames[0];
+    const up  = h.n, fwd = this.vel;
+    const t   = p.frameCount * 0.03 + this.seed;
+    const base = { x: h.p.x + up.x * h.w * 0.5, y: h.p.y + up.y * h.w * 0.5 };
+    const dirs = [
+      p5.Vector.add(p5.Vector.mult(fwd, 0.45), up).normalize(),
+      p5.Vector.add(fwd, p5.Vector.mult(up, 0.75)).normalize()
+    ];
+    const lens = [70 * this.s, 58 * this.s];
+    dirs.forEach((d, i) => {
+      const sway = p.sin(t + i) * 0.15;
+      const dd   = d.copy().rotate(sway);
+      const tip  = { x: base.x + dd.x * lens[i], y: base.y + dd.y * lens[i] };
+      const c    = this.stops[3];
+      p.stroke(c[0], c[1], c[2]); p.strokeWeight(1.6 * this.s + 0.4);
+      p.line(base.x, base.y, tip.x, tip.y);
+      p.noStroke(); p.fill(245, 245, 243);
+      p.circle(p.lerp(base.x, tip.x, 0.5), p.lerp(base.y, tip.y, 0.5), 2 * this.bone.bead * this.s * 0.6);
+      p.stroke(245, 245, 243); p.strokeWeight(1.2); p.fill(BG[0], BG[1], BG[2]);
+      p.circle(tip.x, tip.y, 11 * this.s + 2);
+      p.noStroke(); p.fill(c[0], c[1], c[2]);
+      p.circle(tip.x, tip.y, 4.5 * this.s + 1);
+    });
+  }
+}
+
+// ============================================================
+// 디버그
+// ============================================================
+function toggleDebug() {
+  debugMode = !debugMode;
+  document.getElementById('debug-panel').classList.toggle('visible', debugMode);
+}
+
+function updateDebug(p) {
+  if (!debugMode) return;
+  const panel = document.getElementById('debug-panel');
+  panel.textContent = [
+    `fps: ${p.frameRate().toFixed(1)}`,
+    `무대: ${stage.length}/${ON_STAGE}`,
+    `풀: ${pool.length}`,
+    `파티클: ${particles.length}`,
+    `총: ${totalCount}`,
+    `도착 대기: ${arriveQueue.length}`,
+    `피드 재연결: ${window._feedReconnectCount ?? 0}`,
+    `번인: (${burnin.x}, ${burnin.y})`,
+    `mock: ${location.search.includes('mock=1')}`,
+    `emulator: ${location.search.includes('emulator=1')}`,
+  ].join('\n');
+}
+
+// ============================================================
+// 장시간 운영
+// ============================================================
+function acquireWakeLock() {
+  if ('wakeLock' in navigator) {
+    navigator.wakeLock.request('screen').catch(() => {});
+  }
+}
+
+function scheduleReload() {
+  function checkReload() {
+    const now = new Date();
+    if (now.getHours() === RELOAD_HOUR && now.getMinutes() === 0) {
+      // 페이지를 받을 수 있는지 확인 후 새로고침
+      fetch(location.href, { method: 'HEAD', cache: 'no-cache' })
+        .then(r => { if (r.ok) location.reload(); })
+        .catch(() => {}); // 실패하면 건너뜀
+    }
+  }
+  setInterval(checkReload, 60000);
+}
+
+// ============================================================
+// QR
+// ============================================================
+function initQR() {
+  const url = window.CloudConfig?.MOBILE_URL;
+  if (!url) return;
+  const el = document.getElementById('qr-corner');
+  // QR 라이브러리가 있으면 생성, 없어도 타워는 동작
+  if (typeof QRCode !== 'undefined') {
+    try {
+      new QRCode(el, {
+        text: url, width: 100, height: 100,
+        colorDark: '#c8cae0', colorLight: '#04050a',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    } catch (e) {}
+  }
+}
+
+// ============================================================
+// 디버그용 전역 (D 키 외에도 콘솔에서 접근 가능)
+// ============================================================
+window._towerDebug = {
+  get stage()  { return stage; },
+  get pool()   { return pool; },
+  get queue()  { return arriveQueue; },
+  get total()  { return totalCount; },
+};
+</script>
+
+<!-- QR 라이브러리 (없어도 타워는 동작) -->
+<script src="lib/qrcode.min.js"></script>
+
+</body>
+</html>
