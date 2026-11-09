@@ -503,9 +503,10 @@ function drawCard(p, bx, by) {
   }
 
   const lh = 22, w = 260, h = lines.length * lh + 56;
-  let x = sn.shellPos.x + sn.R * 1.4 + bx;
-  let y = sn.shellPos.y - h / 2 + by;
-  if (x + w > p.width - 12) x = sn.shellPos.x - sn.R * 1.4 - w + bx;
+  const hx = sn.head.x, hy = sn.head.y - sn.R * 0.5;
+  let x = hx + sn.R * 1.4 + bx;
+  let y = hy - h / 2 + by;
+  if (x + w > p.width - 12) x = hx - sn.R * 1.4 - w + bx;
   x = p.constrain(x, 12, p.width - w - 12);
   y = p.constrain(y, 12, p.height - h - 60);
 
@@ -515,7 +516,7 @@ function drawCard(p, bx, by) {
 
   // 하이라이트 링
   p.noFill(); p.stroke(245, 245, 243, 100); p.strokeWeight(1.5);
-  p.circle(sn.shellPos.x + bx, sn.shellPos.y + by, sn.R * 2.6);
+  p.circle(hx + bx, hy + by, sn.R * 2.6);
 
   // 도착 표시
   if (isArriving) {
