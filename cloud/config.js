@@ -1,4 +1,4 @@
-// 복사본: 원본은 SVartSoft cloud/config.js, 커밋 262b339663fb8c1b6aa8430ed6b516cc2cefe419. 이 레포에서 고치지 말 것.
+// Mirrored from SVart/cloud (schema v2). Update SVart first, then run scripts/sync-tower-cloud.py.
 /**
  * 청각 다변기 (Sound Variator) - 클라우드 설정
  *
@@ -11,7 +11,7 @@ window.CloudConfig = {
   FIREBASE_REGION: 'asia-northeast3',
 
   // Firebase 웹 앱 설정 (Firebase 콘솔 → 프로젝트 설정 → 앱 → 웹 앱 → SDK 설정에서 복사)
-  // 아직 미입력. SETUP.md 참고
+  // Existing exhibition project. SVart/cloud is the canonical source.
   FIREBASE_CONFIG: {
     apiKey: 'AIzaSyBAyuRkGF7eGJBcTRk4KbB10w24OEROEQY',
     authDomain: 'svart-tower.firebaseapp.com',
@@ -25,7 +25,7 @@ window.CloudConfig = {
   CLOUD_ENABLED: true,
 
   // 앱 버전. 스키마가 바뀌면 올림 (Firestore에 v:1이 있으므로 여기는 앱 코드 버전)
-  APP_VERSION: '1.0.0',
+  APP_VERSION: '2.0.0',
 
   // reCAPTCHA Enterprise 사이트 키 (App Check). 비어 있으면 App Check 비활성화
   APP_CHECK_SITE_KEY: '',
@@ -68,7 +68,7 @@ window.CloudConfig = {
 };
 
 // ?emulator=1은 로컬 에뮬레이터에만 붙으므로 실제 프로젝트 설정 대신 테스트 프로젝트를 씀
-if (location.search.includes('emulator=1')) {
+if (new URLSearchParams(location.search).get('emulator') === '1') {
   window.CloudConfig.FIREBASE_CONFIG = {
     apiKey: 'test', authDomain: 'test', projectId: 'svart-test',
     storageBucket: '', messagingSenderId: '', appId: 'test'

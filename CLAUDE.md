@@ -6,30 +6,31 @@
 
 ---
 
-## 0. 이 레포와 SVartSoft의 관계
+## 0. 이 레포와 SVart의 관계 — 2026-11-09 사용자 확정
 
-- **검사 앱**은 `SVartSoft` 레포에 있다. 관람객 결과를 Firestore `ears` 컬렉션에 저장한다.
-- **이 레포**는 타워 화면만 담는다. Firebase 백엔드 코드는 SVartSoft/cloud/에서 복사해 왔다.
-- `cloud/config.js`, `cloud/firebase.js`, `cloud/feed.js`는 **복사본**이다. 이 레포에서 고치지 않는다.
-  - 고칠 일이 생기면 "SVartSoft에서 먼저 고치고 → 다시 복사" 순서로 한다.
-  - 현재 복사 기준 커밋: `262b339` (SVartSoft)
-- `ref/`는 커밋하지 않는다 (`.gitignore`).
+- **검사 앱과 백엔드 계약의 원본은 `SVart` 레포**입니다. 사용자 지시에 따라 이전 SVartSoft 기준은 더 이상 적용하지 않습니다.
+- 현재 payload는 `v:2`, `codeVersion:2`, 청감 코드는 `IWS-RLF(13.2k/6)`입니다. 수신 컬렉션은 같은 Firebase 프로젝트 `svart-tower`의 `ears`입니다.
+- `cloud/schema.js`, `config.js`, `firebase.js`, `feed.js`는 SVart/cloud에서 동기화합니다. 수정은 SVart에서 먼저 하고 `python3 scripts/sync-tower-cloud.py`로 복사합니다. `--check`는 차이를 읽기만 합니다.
+- `profile.maxFreqHz`는 **8,000~20,000Hz 실제값**입니다. 타워에서 8~16kHz를 늘리는 예전 변환은 제거했습니다. 기존 v1 데이터도 Hz 그대로 그립니다.
+- 기존 v1 문서는 계속 읽고, 새로운 전송·쓰기 규칙은 v2를 사용합니다. 개인정보 설정(이름 저장/표시 기본 false)은 유지합니다.
+- Firestore 규칙과 인덱스도 SVart가 원본입니다. 현재 로컬 수정이며 실제 프로젝트 배포와 main 푸시는 별도 요청 전까지 하지 않습니다.
+- `ref/`는 커밋하지 않습니다.
 
 ## 1. 실행 방법
 
 ```bash
 # 로컬 서버
-python3 -m http.server 8766   # SVartSoft(8765)와 겹치지 않게
+python3 -m http.server 8766   # SVart(8765)와 겹치지 않게
 
 # 가짜 데이터 모드 (Firebase 없이 개발)
 http://localhost:8766/?mock=1
 http://localhost:8766/?mock=1&arrive=15   # 15초마다 가짜 도착
 
-# 로컬 에뮬레이터 (SVartSoft 폴더에서 먼저 에뮬레이터 실행 필요)
+# 로컬 에뮬레이터 (SVart 폴더에서 먼저 에뮬레이터 실행 필요)
 http://localhost:8766/?emulator=1
 ```
 
-에뮬레이터 실행 (SVartSoft 폴더에서):
+에뮬레이터 실행 (SVart 폴더에서):
 ```bash
 PATH=/opt/homebrew/opt/openjdk@21/bin:$PATH firebase emulators:start --only firestore --project svart-test
 ```
@@ -39,7 +40,7 @@ PATH=/opt/homebrew/opt/openjdk@21/bin:$PATH firebase emulators:start --only fire
 - `R` : 처음부터 (리셋)
 - `D` : 디버그 패널 토글
 
-## 3. 피드 API (SVartSoft/cloud/feed.js에서 넘겨받음)
+## 3. 피드 API (SVart/cloud/feed.js에서 넘겨받음)
 
 ```js
 window.svartFeed.startFeed({
@@ -68,7 +69,7 @@ Part 2 항목은 null일 수 있다.
 | `volDb` | 몸 크기 |
 | `register` LOW/MID/HIGH | 뼈 굵기 |
 | `lowDb`, `highDb` | 색, 앉는 잎 |
-| `maxFreqHz` 8000~16000 → 전체 범위 재대응 | 꼬임 촘촘함 |
+| `maxFreqHz` 8000~20000 실제값 그대로 | 꼬임 촘촘함 |
 | `dominantEar` LEFT/RIGHT | 꼬임 방향 |
 | `centerImage` L/C/R → 별/도트/하트 | 점액 모양 |
 | `pitchMode` F/B/H → 네모/둥근네모/동그라미 | 껍질 모양 |
@@ -83,7 +84,7 @@ config.js의 미확정 항목과 같음:
 - `ON_STAGE`: 화면 최대 마리 수 (기본 32, 임시)
 - 달팽이 ↔ 타워 비주얼 최종 대응
 
-## 6. 작업 규칙 (SVartSoft 8장과 같음)
+## 6. 작업 규칙 (SVart 8장과 같음)
 
 - 결정권은 원우리 작가에게 있다. 미확정은 설정값으로 빼 둔다.
 - 캐릭터 별칭('말…이')을 화면, 코드, 주석 어디에도 쓰지 않는다.

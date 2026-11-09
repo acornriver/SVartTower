@@ -36,13 +36,10 @@ function mapProfile(profile) {
 
   // ── Part 2 ──────────────────────────────────────────────────────
 
-  // 임시: maxFreqHz 8000~16000 → 참조 코드의 꼬임 범위(8000~20000) 전체에 다시 대응
-  // 참조 코드는 8000~20000 기준이라 그대로 쓰면 가장 촘촘한 꼬임에 닿지 않음
-  const maxFreqHz = (() => {
-    if (p.maxFreqHz == null) return 14000;  // 임시: 없으면 중간값
-    // 8000~16000 → 8000~20000 선형 대응
-    return 8000 + (p.maxFreqHz - 8000) * (12000 / 8000); // 임시
-  })();
+  // SVart v2: maxFreqHz is actual Hz in 8000..20000; never stretch the received value.
+  // Existing v1 records also contain actual Hz, so the same direct mapping applies.
+  const maxFreqHz = typeof p.maxFreqHz === 'number' && Number.isFinite(p.maxFreqHz)
+    ? Math.max(8000, Math.min(window.EarSchema?.MAX_FREQ_HZ || 20000, p.maxFreqHz)) : 14000;
 
   // 임시: dominantEar LEFT/RIGHT → 꼬임 방향. ALTERNATING 없음
   const dominantEar = (() => {

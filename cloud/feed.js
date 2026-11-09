@@ -1,5 +1,4 @@
-// 복사본: 원본은 SVartSoft cloud/feed.js, 커밋 262b339. 이 레포에서 고치지 말 것.
-
+// Mirrored from SVart/cloud (schema v2). Update SVart first, then run scripts/sync-tower-cloud.py.
 /**
  * 청각 다변기 (Sound Variator) - TV 데이터 층
  *
@@ -162,6 +161,7 @@ function _emitRemove(earId) {
 function _toEar(docSnap) {
   const d = docSnap.data();
   return {
+    v: d.v || 1,
     earId: d.earId,
     code: d.code,
     codeVersion: d.codeVersion,
@@ -273,7 +273,7 @@ function _makeMockEar(i) {
     lowDb: rr(-8, 8),
     highDb: rr(-8, 8),
     register: reg,
-    maxFreqHz: maybNull(rr(8000, 16000)),
+    maxFreqHz: maybNull(rr(8000, 20000)),
     sensitivity: maybNull(rr(20, 90)),
     twistAmount: maybNull(rr(0, 1)),
     centerDeg: maybNull(rr(-60, 60)),
@@ -285,12 +285,13 @@ function _makeMockEar(i) {
   };
 
   const regLetter = { LOW: 'O', MID: 'A', HIGH: 'I', null: '·' }[reg] || '·';
-  const code = `${regLetter}ES/5 · CLF 12.0`;
+  const code = `${regLetter === '·' ? 'A' : regLetter}ES-CLF(12.0k/5)`;
 
   return {
     earId,
     code,
-    codeVersion: 1,
+    v: 2,
+    codeVersion: 2,
     profile,
     name: r() > 0.5 ? pick(MOCK_NAMES) : null,
     lang: r() > 0.5 ? 'ko' : 'en',

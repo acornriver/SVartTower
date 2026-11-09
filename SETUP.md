@@ -27,11 +27,11 @@ open "http://localhost:8766/?mock=1"
 # 가짜 데이터 + 15초마다 도착
 open "http://localhost:8766/?mock=1&arrive=15"
 
-# 로컬 에뮬레이터 (SVartSoft 폴더에서 먼저 에뮬레이터 실행)
+# 로컬 에뮬레이터 (SVart 폴더에서 먼저 에뮬레이터 실행)
 open "http://localhost:8766/?emulator=1"
 ```
 
-에뮬레이터 실행 (SVartSoft 폴더에서):
+에뮬레이터 실행 (SVart 폴더에서):
 ```bash
 PATH=/opt/homebrew/opt/openjdk@21/bin:$PATH firebase emulators:start --only firestore --project svart-test
 ```
@@ -82,23 +82,17 @@ open "http://localhost:8766/?mock=1&arrive=3"
 
 ---
 
-## 5. `cloud/` 파일 업데이트 절차
+## 5. 공통 백엔드 파일 업데이트
 
-`cloud/config.js`, `cloud/firebase.js`, `cloud/feed.js`는 **SVartSoft 레포의 복사본**이다.  
-이 파일들을 직접 고치지 않는다.
+원본은 **SVart/cloud/** 입니다. SVart에서 먼저 수정한 뒤 다음 명령으로 동기화합니다.
 
 ```bash
-# SVartSoft에서 먼저 고치고 → 여기에 복사
-cp /path/to/SVartSoft/cloud/config.js  ./cloud/config.js
-cp /path/to/SVartSoft/cloud/firebase.js ./cloud/firebase.js
-cp /path/to/SVartSoft/cloud/feed.js    ./cloud/feed.js
-
-# 각 파일 첫 줄에 복사본 헤더 추가 후 커밋
-# 헤더 형식:
-# // 복사본: 원본은 SVartSoft cloud/<파일명>, 커밋 <hash>. 이 레포에서 고치지 말 것.
+# SVart 폴더에서
+python3 scripts/sync-tower-cloud.py
+python3 scripts/sync-tower-cloud.py --check
 ```
 
----
+schema v2 / codeVersion 2 / 실제 가청 한계 8~20kHz를 사용합니다. 규칙·인덱스 배포도 SVart에서 관리합니다. 기존 SVartSoft 복사본 정책은 사용자 지시로 대체했습니다.
 
 ## 6. Firebase 환경
 
@@ -119,4 +113,4 @@ Firebase Console → App Check → 웹 앱 → 허용 도메인에 `acornriver.g
 - `ON_STAGE`: 화면 최대 마리 수 (현재 32)
 - `cloud/config.js`의 기타 미확정 항목
 
-모두 `cloud/config.js` 에서 조정한다 (SVartSoft에서 먼저 수정 후 복사).
+모두 `cloud/config.js` 에서 조정한다 (SVart에서 먼저 수정 후 복사).

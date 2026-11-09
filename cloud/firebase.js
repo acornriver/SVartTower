@@ -1,18 +1,19 @@
-// 복사본: 원본은 SVartSoft cloud/firebase.js, 커밋 262b339. 이 레포에서 고치지 말 것.
-
+// Mirrored from SVart/cloud (schema v2). Update SVart first, then run scripts/sync-tower-cloud.py.
 /**
  * 청각 다변기 (Sound Variator) - Firebase 초기화 공유 모듈
  *
  * send.js와 feed.js가 함께 쓰는 Firebase app / Firestore / App Check 초기화.
  * CDN 실패는 재시도 대상이므로 여기서 예외를 밖으로 내보내지 않음.
  *
- * Firebase JS SDK: 11.0.2 (2024-11 기준 최신 안정판)
+ * Firebase JS SDK: 11.0.2 (프로젝트 고정 버전)
  * CDN: https://www.gstatic.com/firebasejs/11.0.2/
  */
 
 const FIREBASE_SDK_VERSION = '11.0.2';
 window.FIREBASE_SDK_VERSION = FIREBASE_SDK_VERSION; // send.js, feed.js 공유
 const FIREBASE_BASE = `https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}`;
+
+window.FIREBASE_BASE = FIREBASE_BASE;
 
 // 싱글턴 Promise: 동시에 여러 번 initFirebase()가 불려도 한 번만 로드
 let _firebasePromise = null;
@@ -66,7 +67,9 @@ async function initFirebase() {
 
     if (_isEmulator()) {
       const { connectFirestoreEmulator } = await import(`${FIREBASE_BASE}/firebase-firestore.js`);
-      connectFirestoreEmulator(db, 'localhost', 8080);
+      const requested = Number(new URLSearchParams(location.search).get('emulatorPort') || 8080);
+      const port = Number.isInteger(requested) && requested >= 1024 && requested <= 65535 ? requested : 8080;
+      connectFirestoreEmulator(db, '127.0.0.1', port);
       console.log('[cloud] Firestore 에뮬레이터 연결');
     }
 
@@ -80,7 +83,7 @@ async function initFirebase() {
 }
 
 function _isEmulator() {
-  return location.search.includes('emulator=1');
+  return new URLSearchParams(location.search).get('emulator') === '1';
 }
 
 function _isLocalDev() {
