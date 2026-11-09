@@ -73,9 +73,10 @@ const GRID  = 16;
 const BG    = [4, 5, 10];
 
 const LEAF_RAMP   = [[168, 176, 193], [124, 160, 186], [196, 184, 176], [128, 142, 48], [92, 106, 54]];
-const GROUND_RAMP = [[177, 158, 107], [128, 142, 48], [92, 106, 54], [140, 114, 86], [168, 118, 92]];
-const SKY_RAMP    = [[151, 138, 135], [196, 184, 176], [168, 176, 193], [124, 160, 186], [108, 154, 209]];
-const BONES = { LOW: { rung: 3.2, bead: 4.6 }, MID: { rung: 1.8, bead: 3.0 }, HIGH: { rung: 0.8, bead: 1.7 } };
+// SVart 오실로스코프 스타일 상수
+const HELIX = { bodyTwists: [3, 22], shellTwists: [4, 30], sep: 0.075, rungEvery: 3, spinSpeed: 1.4 };
+const SHELL_POP = { spring: 0.2, damp: 0.7 };
+const RED_DOT = [255, 59, 31];
 
 // ============================================================
 // 상태
@@ -454,14 +455,15 @@ function drawColumn(C, p) {
 }
 
 function drawTonotopy(C, p, bx, by) {
+  // b = 달팽이관 기저부(아래쪽) = 저음, t = 꼭짓점(위쪽) = 고음
   const b = C.proj(0.05, 1.08), t = C.proj(C.S_MAX - 0.3, 1.4);
   p.noStroke(); p.fill(130, 134, 152);
   p.textFont('Noto Sans KR, system-ui, sans-serif');
   p.textSize(12);
   p.textAlign(p.LEFT, p.CENTER);
-  p.text('20 kHz · 높은 소리', b.x + bx + 10, b.y + by);
+  p.text('낮은 소리', b.x + bx + 10, b.y + by);
   p.textAlign(p.LEFT, p.BOTTOM);
-  p.text('20 Hz · 낮은 소리', t.x + bx + 20, t.y + by - 24);
+  p.text('높은 소리', t.x + bx + 20, t.y + by - 24);
 }
 
 // ============================================================
@@ -478,14 +480,14 @@ function drawCard(p, bx, by) {
 
   const lines = [
     ['청감 코드', ear.code || '—'],
-    ['볼륨 → 크기',      d.volDb],
-    ['음역 → 뼈 굵기',   d.register],
-    ['저음 → 색',        d.lowDb],
-    ['고음 → 색',        d.highDb],
+    ['볼륨 → 크기',       d.volDb],
+    ['음역',              d.register],
+    ['저음',              d.lowDb],
+    ['고음',              d.highDb],
     ['최고 주파수 → 꼬임', d.maxFreqHz],
-    ['우세 귀 → 방향',   d.dominantEar],
-    ['중앙 → 점액 모양', d.centerImage],
-    ['바탕음 → 껍질',    d.pitchMode],
+    ['우세 귀',           d.dominantEar],
+    ['중앙 → 선 색',      d.centerDeg],
+    ['바탕음·배음',       d.pitchMode],
   ];
 
   // SHOW_NAMES가 true고 이름이 있으면 첫 줄에 추가
@@ -523,10 +525,11 @@ function drawCard(p, bx, by) {
     p.text('▶ 방금 도착', x + w / 2, y + 8);
   }
 
-  // 그라데이션 띠
+  // 선 색 띠 (sn.ink 기반)
+  const [ir, ig, ib] = sn.ink;
   for (let k = 0; k < w - 32; k++) {
-    const c = gradAt(sn.stops, k / (w - 33));
-    p.fill(c[0], c[1], c[2]);
+    const a = 80 + 120 * Math.abs(Math.sin(Math.PI * k / (w - 33)));
+    p.fill(ir, ig, ib, a);
     p.rect(x + 16 + k, y + (isArriving ? 24 : 16), 1.2, 6);
   }
 
@@ -578,34 +581,13 @@ function drawParticles(p) {
   if (particles.length > 2500) particles.splice(0, particles.length - 2500);
 }
 
+// pitchMode → 슬라임 모양: F=sq, H=circle, B=50/50, null=circle
 function drawShape(shape, s, p) {
-  if (shape === 'dot') {
-    p.circle(0, 0, s * 0.8);
-  } else if (shape === 'star') {
-    p.beginShape();
-    for (let k = 0; k < 10; k++) {
-      const r = k % 2 === 0 ? s * 0.6 : s * 0.25;
-      const a = -p.HALF_PI + k * p.PI / 5;
-      p.vertex(p.cos(a) * r, p.sin(a) * r);
-    }
-    p.endShape(p.CLOSE);
-  } else if (shape === 'sparkle') {
-    p.beginShape();
-    for (let k = 0; k < 8; k++) {
-      const r = k % 2 === 0 ? s * 0.75 : s * 0.12;
-      const a = k * p.PI / 4;
-      p.vertex(p.cos(a) * r, p.sin(a) * r);
-    }
-    p.endShape(p.CLOSE);
-  } else if (shape === 'heart') {
-    p.beginShape();
-    for (let k = 0; k <= 24; k++) {
-      const a = (k / 24) * p.TWO_PI;
-      const hx = 16 * Math.pow(p.sin(a), 3);
-      const hy = -(13 * p.cos(a) - 5 * p.cos(2 * a) - 2 * p.cos(3 * a) - p.cos(4 * a));
-      p.vertex(hx * s * 0.035, hy * s * 0.035);
-    }
-    p.endShape(p.CLOSE);
+  if (shape === 'sq') {
+    const h = s * 0.45;
+    p.rect(-h, -h, h * 2, h * 2, 2);
+  } else {
+    p.circle(0, 0, s * 0.9);
   }
 }
 
@@ -647,40 +629,96 @@ function gradAt(stops, t) {
 }
 
 // ============================================================
-// Snail 클래스 (참조 코드 기반, 도착 연출 추가)
+// SVart 오실로스코프 스타일 렌더 헬퍼
+// ============================================================
+
+// canvas2d 그림자 글로우 + 얇은 선 (scopeStroke 포트)
+function scopeLine(pts, ink, weight, alpha, p) {
+  if (pts.length < 2) return;
+  const dc = p.drawingContext;
+  dc.save();
+  dc.globalAlpha = alpha;
+  dc.shadowBlur = 10;
+  dc.shadowColor = `rgba(${ink[0]},${ink[1]},${ink[2]},0.45)`;
+  dc.strokeStyle = `rgb(${ink[0]},${ink[1]},${ink[2]})`;
+  dc.lineWidth = weight;
+  dc.lineJoin = 'round';
+  dc.lineCap = 'round';
+  dc.beginPath();
+  dc.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) dc.lineTo(pts[i].x, pts[i].y);
+  dc.stroke();
+  dc.restore();
+}
+
+// 이중나선 — spine 경로를 따라 두 가닥 + 가로 연결선 (helixStroke 포트)
+function helixStroke(spine, R, chir, twist, ink, alpha, p) {
+  if (spine.length < 2) return;
+  const sep = HELIX.sep;
+  const pts_a = [], pts_b = [];
+  for (let i = 0; i < spine.length; i++) {
+    const prev = spine[Math.max(0, i - 1)], next = spine[Math.min(spine.length - 1, i + 1)];
+    const tgx = next.x - prev.x, tgy = next.y - prev.y;
+    const len = Math.hypot(tgx, tgy) || 1;
+    const nx = -tgy / len, ny = tgx / len;
+    const ph = twist + chir * i * 0.38;
+    const off = R * sep * Math.sin(ph);
+    pts_a.push({ x: spine[i].x + nx * off, y: spine[i].y + ny * off });
+    pts_b.push({ x: spine[i].x - nx * off, y: spine[i].y - ny * off });
+  }
+  scopeLine(pts_a, ink, 1.2, alpha, p);
+  scopeLine(pts_b, ink, 1.2, alpha, p);
+  // 가로 연결선
+  const rungEvery = HELIX.rungEvery;
+  const dc = p.drawingContext;
+  dc.save();
+  dc.globalAlpha = alpha * 0.6;
+  dc.strokeStyle = `rgb(${ink[0]},${ink[1]},${ink[2]})`;
+  dc.lineWidth = 0.8;
+  for (let i = 0; i < spine.length; i += rungEvery) {
+    dc.beginPath();
+    dc.moveTo(pts_a[i].x, pts_a[i].y);
+    dc.lineTo(pts_b[i].x, pts_b[i].y);
+    dc.stroke();
+  }
+  dc.restore();
+}
+
+// ============================================================
+// Snail 클래스 (SVart 오실로스코프 스타일)
 // ============================================================
 class Snail {
   constructor(pf, ear, atHome, p) {
-    this.pf  = pf;
-    this.ear = ear;
+    this.pf    = pf;
+    this.ear   = ear;
     this.earId = ear.earId;
-    this.p   = p;
+    this.p     = p;
 
-    // Part 1
-    this.vol  = p.map(pf.volDb, -40, 0, 0.55, 1.05, true);
-    this.bone = pf.bone || BONES.MID;
-    const tl = (pf.low + 10) / 20, th = (pf.high + 10) / 20;
-    this.stops = [
-      rampColor(GROUND_RAMP, tl - 0.2), rampColor(GROUND_RAMP, tl),
-      rampColor(SKY_RAMP, th), rampColor(SKY_RAMP, th + 0.2)
-    ];
+    // 선 색 (⑥ centerDeg → SNAIL_PALETTE)
+    this.ink = pf.inkRGB || [245, 245, 243];
 
-    // Part 2: 꼬임
-    this.period     = p.map(pf.maxFreqHz, 8000, 20000, 74, 26, true);
-    this.twistSpeed = p.map(pf.maxFreqHz, 8000, 20000, 0.012, 0.05, true);
+    // 크기 (볼륨 → 배율)
+    this.vol = p.map(pf.volDb, -40, 0, 0.55, 1.05, true);
+
+    // 꼬임 (⑤ maxFreqHz → 나선 밀도)
+    // twistU: 0=저역(느슨), 1=고역(촘촘)
     this.chir       = pf.dominantEar === 'LEFT' ? -1 : 1;
-    this.alternating = false; // LEFT/RIGHT만 있으므로 항상 false
+    this.twistSpeed = p.map(pf.twistU ?? 0.5, 0, 1, 0.012, 0.05);
+    this.period     = p.map(pf.twistU ?? 0.5, 0, 1, 74, 26);
 
-    // Part 2: 점액
-    this.shape = pf.slimeShape || 'dot';
-    this.burst = pf.burst ?? false;
+    // 슬라임 모양 (⑧ pitchMode)
+    const pm = pf.pitchMode;
+    this.slimeShape = pm === 'F' ? 'sq' : pm === 'B' ? (Math.random() < 0.5 ? 'sq' : 'circle') : 'circle';
 
-    // 자기 잎
-    const pref  = Math.max(0.03, Math.min(0.97, (pf.high - pf.low + 20) / 40 + (Math.random() - 0.5) * 0.16));
-    this.home   = (1 - pref) * TURNS * p.TWO_PI * 0.9 + 0.3;
-    this.sPos   = atHome ? this.home + (Math.random() - 0.5) : 0.2;
-    this.dir    = Math.random() < 0.5 ? 1 : -1;
-    if (!atHome) this.dir = 1;
+    // 껍질 모양 플래그 (⑦ dominantEar → shellSquare)
+    this.shellSquare = pf.shellSquare ?? 0;
+
+    // 위치 — 등록 선호도로 잎 자리 결정
+    const pref = Math.max(0.03, Math.min(0.97,
+      ((pf.highDb - pf.lowDb + 20) / 40) + (Math.random() - 0.5) * 0.16));
+    this.home  = (1 - pref) * TURNS * p.TWO_PI * 0.9 + 0.3;
+    this.sPos  = atHome ? this.home + (Math.random() - 0.5) : 0.2;
+    this.dir   = atHome ? (Math.random() < 0.5 ? 1 : -1) : 1;
 
     this.s = 0.5;
     this._applyScale(1, p);
@@ -691,14 +729,15 @@ class Snail {
     this.vel        = p.createVector(1, 0);
     this.spine      = null;
     this.shellPos   = p.createVector(p.width / 2, p.height / 2);
+    this.shellVel   = 0; // SHELL_POP 용
     this.alpha      = 1;
     this.front      = true;
     this.key        = 0;
 
-    // 도착 연출 상태
-    this.arriving   = false;
+    // 도착 연출
+    this.arriving    = false;
     this.arriveStart = 0;
-    this.arriveScale = 1; // 커졌다 돌아오는 배율
+    this.arriveScale = 1;
   }
 
   _applyScale(k, p) {
@@ -719,22 +758,17 @@ class Snail {
   update(C, p) {
     const now = p.millis();
 
-    // 도착 연출: 처음 2초는 빠르게 올라가고, 도착 후 3초 1.6배
     let speedMult = 1;
     if (this.arriving) {
       const elapsed = now - this.arriveStart;
       if (elapsed < ARRIVE_CLIMB_MS) {
-        // 빠르게 올라가기
-        speedMult = 4;
-        this.arriveScale = 1;
+        speedMult = 4; this.arriveScale = 1;
       } else if (elapsed < ARRIVE_CLIMB_MS + ARRIVE_GROW_MS) {
-        // 커졌다 돌아오기
         const t = (elapsed - ARRIVE_CLIMB_MS) / ARRIVE_GROW_MS;
-        this.arriveScale = 1 + 0.6 * Math.sin(t * Math.PI); // 1.6배 피크
+        this.arriveScale = 1 + 0.6 * Math.sin(t * Math.PI);
         speedMult = 0.3;
       } else {
-        this.arriving   = false;
-        this.arriveScale = 1;
+        this.arriving = false; this.arriveScale = 1;
       }
     }
 
@@ -765,205 +799,143 @@ class Snail {
     this.front = pt.depth >= 0;
     this.alpha = this.front ? 1 : 0.42 + 0.3 * (1 + pt.depth);
     this.key   = pt.depth * r + (this.front ? -C.z(this.sPos) * 0.4 : C.z(this.sPos) * 0.4) + 0.5;
-    this._build(p);
+
+    // 껍질 위치 업데이트 (SHELL_POP 스프링)
+    const fr = this.spine[Math.floor(SEG * 0.4)];
+    if (fr) {
+      const n0 = p.createVector(-this.vel.y, this.vel.x);
+      const upSide = n0.y > 0 ? -1 : 1;
+      const nScaled = n0.copy().mult(upSide);
+      const targetX = fr.x + nScaled.x * (this.bodyW * 0.7 + this.R * 0.8);
+      const targetY = fr.y + nScaled.y * (this.bodyW * 0.7 + this.R * 0.8);
+      this.shellPos.lerp({ x: targetX, y: targetY }, 0.25);
+    }
+
     this._emit(p);
   }
 
   drawGlow(g, p) {
-    g.noFill();
+    if (!this.spine) return;
+    const [ir, ig, ib] = this.ink;
     const k = this.alpha;
-    g.strokeWeight(7 * this.s);
-    for (const [key, t] of [['a', 0.3], ['b', 0.75]]) {
-      const c = gradAt(this.stops, t);
-      g.stroke(c[0], c[1], c[2], GLOW_ALPHA * k);
-      g.beginShape();
-      for (let i = 0; i < this.body.length; i += 2) g.vertex(this.body[i][key].x, this.body[i][key].y);
-      g.endShape();
-    }
-    const c = gradAt(this.stops, 0.5);
-    g.stroke(c[0], c[1], c[2], GLOW_ALPHA * 0.8 * k);
-    g.strokeWeight(11 * this.s);
+    // 몸통 글로우
+    g.noFill(); g.stroke(ir, ig, ib, GLOW_ALPHA * k); g.strokeWeight(5 * this.s);
     g.beginShape();
-    for (let i = 0; i < this.shell.length; i += 3)
-      g.vertex((this.shell[i].a.x + this.shell[i].b.x) / 2, (this.shell[i].a.y + this.shell[i].b.y) / 2);
+    for (const pt of this.spine) g.vertex(pt.x, pt.y);
     g.endShape();
-    g.noStroke(); g.fill(c[0], c[1], c[2], 14 * k);
-    const h = this.frames[0];
-    for (let d = 34; d > 4; d -= 6) g.circle(h.p.x, h.p.y, d * this.s);
+    // 껍질 글로우
+    g.stroke(ir, ig, ib, GLOW_ALPHA * 0.7 * k); g.strokeWeight(8 * this.s);
+    const cx = this.shellPos.x, cy = this.shellPos.y;
+    const T = 2.9 * p.TWO_PI, bb = Math.log(this.R / Math.max(1, 4 * this.s)) / T;
+    g.beginShape();
+    for (let th = 1.3; th <= T; th += 0.25) {
+      const r = this.R * Math.exp(bb * (th - T));
+      g.vertex(cx + Math.cos(th) * r, cy + Math.sin(th) * r);
+    }
+    g.endShape();
   }
 
   _emit(p) {
-    const tail  = this.spine[SEG - 1];
-    const every = this.burst ? 3 : 7;
-    if ((p.frameCount + Math.floor(this.seed)) % every !== 0) return;
-    const n = this.burst ? 2 : 1;
-    for (let k = 0; k < n; k++) {
-      const c = Math.random() < 0.25 ? [245, 245, 243] : this.stops[Math.floor(Math.random() * this.stops.length)];
-      const back = this.vel.copy().mult(-1);
-      const v = this.burst
-        ? p5.Vector.fromAngle(back.heading() + p.random(-1.2, 1.2)).mult(p.random(0.4, 1.6))
-        : p.createVector(0, 0);
-      particles.push({
-        x: tail.x + p.random(-3, 3) * this.s, y: tail.y + p.random(-3, 3) * this.s,
-        vx: v.x, vy: v.y,
-        life: 1, decay: this.burst ? p.random(0.008, 0.016) : 0.0035,
-        size: (this.burst ? p.random(4, 9) : p.random(3, 5)) * (0.6 + this.s * 0.6),
-        rot: p.random(p.TWO_PI), spin: this.burst ? p.random(-0.08, 0.08) : 0,
-        shape: this.shape, c, tw: p.random(p.TWO_PI)
-      });
-    }
-  }
-
-  _build(p) {
-    const travel = this.vel.x <= 0 ? 1 : -1;
-    const n0 = p.createVector(-this.vel.y, this.vel.x);
-    const upSide = n0.y > 0 ? -1 : 1;
-    const frames = [];
-    for (let i = 0; i < SEG; i++) {
-      const a  = this.spine[Math.max(0, i - 1)];
-      const b  = this.spine[Math.min(SEG - 1, i + 1)];
-      const tg = p5.Vector.sub(a, b).normalize();
-      const nr = p.createVector(-tg.y, tg.x).mult(upSide);
-      const u  = i / (SEG - 1);
-      let w = u < 0.12 ? p.sin((u / 0.12) * p.HALF_PI) : Math.pow(1 - (u - 0.12) / 0.88, 0.85);
-      w *= this.bodyW * (1 + 0.08 * p.sin((p.frameCount + this.seed) * 0.2 - u * 12));
-      frames.push({ p: this.spine[i], n: nr, w, u });
-    }
-    this.frames = frames;
-
-    const body = [];
-    let acc = 0, prev = null, ph = this.twist, lastR = -1e9;
-    for (let i = 0; i < SEG - 1; i++) {
-      for (let j = 0; j < SUB; j++) {
-        const q  = j / SUB;
-        const f0 = frames[i], f1 = frames[i + 1];
-        const pt = p5.Vector.lerp(f0.p, f1.p, q);
-        const n  = p5.Vector.lerp(f0.n, f1.n, q).normalize();
-        const w  = p.lerp(f0.w, f1.w, q), u = p.lerp(f0.u, f1.u, q);
-        const ds = prev ? p5.Vector.dist(pt, prev) : 0;
-        prev = pt; acc += ds;
-        ph += this.chir * ds * p.TWO_PI / (this.period * this.s);
-        const node = this._node(pt.x + n.x * w * 0.15, pt.y + n.y * w * 0.15,
-          Math.atan2(n.y, n.x), 0.7 * w, ph, 1 - u * 0.55, 0.45 + 0.55 * (1 - u));
-        node.rung = acc - lastR >= 7.5 * this.s && w > 3 * this.s && u < 0.96;
-        if (node.rung) lastR = acc;
-        body.push(node);
-      }
-    }
-    this.body = body;
-
-    const fr = frames[Math.floor(SEG * 0.4)];
-    const R  = this.R * (1 + 0.03 * p.sin((p.frameCount + this.seed) * 0.05));
-    const target = p.createVector(fr.p.x + fr.n.x * (fr.w * 0.7 + R * 0.8), fr.p.y + fr.n.y * (fr.w * 0.7 + R * 0.8));
-    this.shellPos.lerp(target, 0.25);
-    const cx = this.shellPos.x, cy = this.shellPos.y;
-    const sg = travel * this.chir;
-    const rot = sg > 0 ? 0.4 : p.PI - 0.4;
-    const T  = 2.9 * p.TWO_PI;
-    const bb = Math.log(R / (4 * this.s)) / T;
-    const shell = [];
-    let sacc = 0, sprev = null, slast = 0;
-    const twistK = 46 / this.period;
-    for (let th = 1.3; th <= T; th += 0.075) {
-      const r  = R * Math.exp(bb * (th - T));
-      const k  = r / R;
-      const ang = sg * th + rot;
-      const c  = { x: cx + Math.cos(ang) * r, y: cy + Math.sin(ang) * r };
-      if (sprev) sacc += Math.hypot(c.x - sprev.x, c.y - sprev.y);
-      sprev = c;
-      const node = this._node(c.x, c.y, ang, 0.16 * r,
-        this.twist * 0.8 + this.chir * th * 4.2 * twistK, 0.35 + 0.65 * k, 0.45 * k);
-      node.rung = k > 0.14 && sacc - slast >= 7.5 * this.s * (0.5 + 0.5 * k);
-      if (node.rung) slast = sacc;
-      shell.push(node);
-    }
-    this.shell = shell;
-  }
-
-  _node(x, y, ang, amp, ph, sc, t) {
-    const s = Math.sin(ph), c = Math.cos(ph);
-    const nx = Math.cos(ang), ny = Math.sin(ang);
-    return {
-      a: { x: x + nx * amp * s, y: y + ny * amp * s },
-      b: { x: x - nx * amp * s, y: y - ny * amp * s },
-      da: c, db: -c, sc,
-      col: gradAt(this.stops, t), colB: gradAt(this.stops, t + 0.08)
-    };
+    if (!this.spine) return;
+    if ((p.frameCount + Math.floor(this.seed)) % 7 !== 0) return;
+    const tail = this.spine[SEG - 1];
+    const [ir, ig, ib] = this.ink;
+    const isWhite = Math.random() < 0.2;
+    particles.push({
+      x: tail.x + p.random(-3, 3) * this.s,
+      y: tail.y + p.random(-3, 3) * this.s,
+      vx: 0, vy: 0,
+      life: 1, decay: 0.0032,
+      size: p.random(3, 5) * (0.6 + this.s * 0.6),
+      rot: p.random(p.TWO_PI), spin: 0,
+      shape: this.slimeShape,
+      c: isWhite ? [245, 245, 243] : [ir, ig, ib],
+      tw: p.random(p.TWO_PI)
+    });
   }
 
   draw(hi, p) {
-    p.strokeCap(p.ROUND);
-    this._group(this.body, hi, p);
-    p.noStroke(); p.fill(BG[0], BG[1], BG[2], 225);
-    p.circle(this.shellPos.x, this.shellPos.y, this.R * 2.1);
-    this._group(this.shell, hi, p);
-    this._eyes(p);
+    if (!this.spine) return;
+    const alpha = this.alpha;
+
+    // 몸통: 이중나선
+    helixStroke(this.spine.map(v => ({ x: v.x, y: v.y })),
+      this.bodyW, this.chir, this.twist, this.ink, alpha, p);
+
+    // 껍질
+    this._drawShell(hi, p, alpha);
+
+    // 더듬이
+    this._drawAntennae(p, alpha);
+
+    // 카드 하이라이트 링
     if (hi) {
-      p.noFill(); p.stroke(245, 245, 243, 120); p.strokeWeight(1);
+      p.noFill(); p.stroke(245, 245, 243, 100); p.strokeWeight(1);
       p.circle(this.shellPos.x, this.shellPos.y, this.R * 2.5);
     }
   }
 
-  _group(arr, hi, p) {
-    this._strands(arr, false, hi, p);
-    this._bones(arr, p);
-    this._strands(arr, true, hi, p);
-  }
+  _drawShell(hi, p, alpha) {
+    const cx = this.shellPos.x, cy = this.shellPos.y;
+    const R = this.R;
+    const T = 2.9 * p.TWO_PI;
+    const bb = Math.log(R / Math.max(1, 4 * this.s)) / T;
+    const sg = this.chir > 0 ? 1 : -1;
+    const pts = [];
+    for (let th = 1.3; th <= T; th += 0.07) {
+      const r = R * Math.exp(bb * (th - T));
+      pts.push({ x: cx + Math.cos(sg * th) * r, y: cy + Math.sin(sg * th) * r });
+    }
 
-  _strands(arr, front, hi, p) {
-    const base = 2.6 * this.s;
-    for (const key of ['a', 'b']) {
-      const dk = key === 'a' ? 'da' : 'db', ck = key === 'a' ? 'col' : 'colB';
-      const passes = front ? [[3, hi ? 70 : 40], [1, 255]] : [[0.6, 220]];
-      for (const [wm, al] of passes) {
-        for (let i = 0; i < arr.length - 1; i++) {
-          const d = (arr[i][dk] + arr[i + 1][dk]) * 0.5;
-          if ((d >= 0) !== front) continue;
-          const c = arr[i][ck], dim = front ? 1 : 0.4;
-          p.stroke(c[0] * dim, c[1] * dim, c[2] * dim, al);
-          p.strokeWeight(Math.max(0.6, base * arr[i].sc * wm));
-          p.line(arr[i][key].x, arr[i][key].y, arr[i + 1][key].x, arr[i + 1][key].y);
-        }
+    if (this.shellSquare) {
+      // 우세 귀 LEFT → 네모 껍질 (각진 나선)
+      scopeLine(pts, this.ink, 1.4, alpha, p);
+      // 꼭짓점에만 흰 점
+      if (pts.length > 10) {
+        const tip = pts[pts.length - 1];
+        const dc = p.drawingContext;
+        dc.save(); dc.globalAlpha = alpha;
+        dc.fillStyle = `rgb(245,245,243)`;
+        dc.beginPath(); dc.rect(tip.x - 2, tip.y - 2, 4, 4); dc.fill();
+        dc.restore();
       }
+    } else {
+      // 우세 귀 RIGHT → 둥근 껍질 (이중나선)
+      helixStroke(pts, R * 0.1, sg, this.twist * 0.6, this.ink, alpha, p);
     }
   }
 
-  _bones(arr, p) {
-    for (const pt of arr) {
-      if (!pt.rung) continue;
-      const s = this.s * pt.sc;
-      p.stroke(245, 245, 243); p.strokeWeight(Math.max(0.5, this.bone.rung * s));
-      p.line(pt.a.x, pt.a.y, pt.b.x, pt.b.y);
-      p.noStroke(); p.fill(245, 245, 243);
-      p.circle(pt.a.x, pt.a.y, 2 * this.bone.bead * s * (0.55 + 0.45 * (pt.da * 0.5 + 0.5)));
-      p.circle(pt.b.x, pt.b.y, 2 * this.bone.bead * s * (0.55 + 0.45 * (pt.db * 0.5 + 0.5)));
-    }
-  }
-
-  _eyes(p) {
-    const h   = this.frames[0];
-    const up  = h.n, fwd = this.vel;
-    const t   = p.frameCount * 0.03 + this.seed;
-    const base = { x: h.p.x + up.x * h.w * 0.5, y: h.p.y + up.y * h.w * 0.5 };
+  _drawAntennae(p, alpha) {
+    if (!this.spine || this.spine.length < 2) return;
+    const head = this.spine[0];
+    const fwd  = this.vel;
+    const t    = p.frameCount * 0.03 + this.seed;
+    const up   = p.createVector(-fwd.y, fwd.x);
+    // 항상 오른쪽을 보는 달팽이 → 더듬이는 이동 방향 앞 위로
     const dirs = [
-      p5.Vector.add(p5.Vector.mult(fwd, 0.45), up).normalize(),
-      p5.Vector.add(fwd, p5.Vector.mult(up, 0.75)).normalize()
+      p5.Vector.add(p5.Vector.mult(fwd, 0.5), up).normalize(),
+      p5.Vector.add(fwd, p5.Vector.mult(up, 0.9)).normalize()
     ];
-    const lens = [70 * this.s, 58 * this.s];
+    const [ir, ig, ib] = this.ink;
+    const dc = p.drawingContext;
+    dc.save();
+    dc.globalAlpha = alpha;
+    dc.strokeStyle = `rgb(${ir},${ig},${ib})`;
+    dc.lineWidth = Math.max(0.8, 1.4 * this.s);
+    dc.lineCap = 'round';
+
     dirs.forEach((d, i) => {
-      const sway = p.sin(t + i) * 0.15;
-      const dd   = d.copy().rotate(sway);
-      const tip  = { x: base.x + dd.x * lens[i], y: base.y + dd.y * lens[i] };
-      const c    = this.stops[3];
-      p.stroke(c[0], c[1], c[2]); p.strokeWeight(1.6 * this.s + 0.4);
-      p.line(base.x, base.y, tip.x, tip.y);
-      p.noStroke(); p.fill(245, 245, 243);
-      p.circle(p.lerp(base.x, tip.x, 0.5), p.lerp(base.y, tip.y, 0.5), 2 * this.bone.bead * this.s * 0.6);
-      p.stroke(245, 245, 243); p.strokeWeight(1.2); p.fill(BG[0], BG[1], BG[2]);
-      p.circle(tip.x, tip.y, 11 * this.s + 2);
-      p.noStroke(); p.fill(c[0], c[1], c[2]);
-      p.circle(tip.x, tip.y, 4.5 * this.s + 1);
+      const sway = Math.sin(t + i) * 0.15;
+      const ang  = Math.atan2(d.y, d.x) + sway;
+      const len  = (i === 0 ? 70 : 58) * this.s;
+      const ex   = head.x + Math.cos(ang) * len;
+      const ey   = head.y + Math.sin(ang) * len;
+      dc.beginPath(); dc.moveTo(head.x, head.y); dc.lineTo(ex, ey); dc.stroke();
+      // 빨간 점
+      dc.fillStyle = `rgb(${RED_DOT[0]},${RED_DOT[1]},${RED_DOT[2]})`;
+      dc.beginPath(); dc.arc(ex, ey, 3.5 * this.s, 0, Math.PI * 2); dc.fill();
     });
+    dc.restore();
   }
 }
 

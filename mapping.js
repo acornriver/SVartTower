@@ -1,82 +1,77 @@
 /**
- * 청감 타워 — 프로필 → 달팽이 변환
+ * 청감 타워 — 프로필 → 달팽이 변환 (v2)
  *
- * 실제 ear.profile 필드를 cochlea-cloud.html의 Snail 생성자 입력 형식으로 바꾼다.
- * 변환 로직은 이 파일 한 곳에만 둔다.
- * 모든 대응에 // 임시 주석을 달았다. 원우리 작가 확인 후 확정한다.
+ * ear.profile 필드를 타워 Snail이 쓰는 형식으로 변환한다.
+ * SVart cloud/schema.js의 v2 프로필 기준.
  */
 
-// 참조 코드(cochlea-cloud.html)의 색 팔레트 — 그대로 유지
-const MAP_GROUND_RAMP = [[177, 158, 107], [128, 142, 48], [92, 106, 54], [140, 114, 86], [168, 118, 92]];
-const MAP_SKY_RAMP    = [[151, 138, 135], [196, 184, 176], [168, 176, 193], [124, 160, 186], [108, 154, 209]];
-const MAP_BONES       = { LOW: { rung: 3.2, bead: 4.6 }, MID: { rung: 1.8, bead: 3.0 }, HIGH: { rung: 0.8, bead: 1.7 } };
+const SNAIL_PALETTE_HEX = [
+  '#B19E6B','#808E30','#5C6A36','#8C7256','#A8765C',
+  '#978A87','#C4B8B0','#A8B0C1','#7CA0BA','#6C9AD1'
+];
+
+// hex → [r, g, b] (0-255)
+function hexRGB(h) {
+  const v = parseInt(h.slice(1), 16);
+  return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+}
+const SNAIL_PALETTE_RGB = SNAIL_PALETTE_HEX.map(hexRGB);
+
+/** u ∈ [0,1] → [r,g,b] (0-255). ⑥ 중앙 → 색 대응. */
+function paletteAt(u) {
+  u = Math.max(0, Math.min(1, u));
+  const x = u * (SNAIL_PALETTE_RGB.length - 1);
+  const i = Math.min(SNAIL_PALETTE_RGB.length - 2, Math.floor(x));
+  const f = x - i;
+  return [0, 1, 2].map(k => SNAIL_PALETTE_RGB[i][k] + f * (SNAIL_PALETTE_RGB[i + 1][k] - SNAIL_PALETTE_RGB[i][k]));
+}
+
+/** centerDeg (-180..180, +오른쪽) → [r,g,b]. 모르면 흰색 */
+function centerColor(deg) {
+  if (typeof deg !== 'number' || !Number.isFinite(deg)) return [245, 245, 243];
+  const u = (Math.max(-90, Math.min(90, deg)) + 90) / 180;
+  return paletteAt(u);
+}
 
 /**
- * ear.profile → Snail 생성자에 넘길 pf 객체
- * profile에 값이 없으면 중간값을 쓰고, 카드 표시용 _display에 "—"를 담는다.
- *
- * @param {object} profile  ear.profile
- * @returns {object}  pf (Snail이 읽는 형식) + _display (카드 표시용)
+ * ear.profile → 타워 Snail이 읽는 pf 객체 + 카드 표시용 _display
+ * @param {object} profile  ear.profile (v2 스키마)
+ * @returns {object}  pf
  */
 function mapProfile(profile) {
   const p = profile || {};
+  const MAX_HZ = 20000, MIN_HZ = 8000;
 
-  // ── Part 1 ──────────────────────────────────────────────────────
+  // ── 크기 ──────────────────────────────────────────────────────────
+  // volDb (-40..0) → 달팽이 크기 배율 0.55..1.05
+  const volDb   = typeof p.volDb === 'number' ? p.volDb : -20;
 
-  // 임시: volDb 그대로 → 몸 크기. 참조 코드와 범위가 같음(-40~0)
-  const volDb = (p.volDb != null) ? p.volDb : -20;
+  // ── 선 색 (⑥ centerDeg → SNAIL_PALETTE) ─────────────────────────
+  const inkRGB  = centerColor(p.centerDeg);  // [r,g,b]
+  const glowRGB = inkRGB;
 
-  // 임시: register 그대로 → 뼈 굵기. LOW/MID/HIGH 값이 같음
-  const register = (p.register != null) ? p.register : 'MID';
-  const bone = MAP_BONES[register] || MAP_BONES.MID;
-
-  // 임시: lowDb/highDb 그대로 → 색, 앉는 잎. 범위 ±10dB로 같음
-  const lowDb  = (p.lowDb  != null) ? p.lowDb  : 0;  // 임시: 없으면 0
-  const highDb = (p.highDb != null) ? p.highDb : 0;  // 임시: 없으면 0
-
-  // ── Part 2 ──────────────────────────────────────────────────────
-
-  // SVart v2: maxFreqHz is actual Hz in 8000..20000; never stretch the received value.
-  // Existing v1 records also contain actual Hz, so the same direct mapping applies.
+  // ── 꼬임 (⑤ 고역한계 → 이중나선 꼬임) ───────────────────────────
+  // maxFreqHz 8000→20000 : twistU 0→1
   const maxFreqHz = typeof p.maxFreqHz === 'number' && Number.isFinite(p.maxFreqHz)
-    ? Math.max(8000, Math.min(window.EarSchema?.MAX_FREQ_HZ || 20000, p.maxFreqHz)) : 14000;
+    ? Math.max(MIN_HZ, Math.min(MAX_HZ, p.maxFreqHz)) : 14000;
+  const twistU    = (maxFreqHz - MIN_HZ) / (MAX_HZ - MIN_HZ); // 0=저역, 1=고역
 
-  // 임시: dominantEar LEFT/RIGHT → 꼬임 방향. ALTERNATING 없음
-  const dominantEar = (() => {
-    if (p.dominantEar === 'LEFT')  return 'LEFT';
-    if (p.dominantEar === 'RIGHT') return 'RIGHT';
-    return 'RIGHT';  // 임시: null이면 오른쪽으로
-  })();
+  // ── 우세 귀 (더듬이 길이·껍질 모양) ─────────────────────────────
+  // LEFT → antR < antL, 껍질 네모; RIGHT → antL < antR, 껍질 둥근
+  const dominantEar = p.dominantEar === 'LEFT' ? 'LEFT' : 'RIGHT';
+  const earStrength = typeof p.earStrength === 'number' ? Math.max(0, Math.min(100, p.earStrength)) : 50;
+  const shellSquare = dominantEar === 'LEFT' ? 1 : 0; // 1=네모, 0=둥근
 
-  // 임시: centerImage L/C/R → 점액 모양 (별/도트/하트)
-  // 참조 코드의 speech.yannyLaurel+jaCha → shape 대응 대신 직접 shape을 정함
-  const slimeShape = (() => {
-    if (p.centerImage === 'L') return 'star';    // 임시: L → 별
-    if (p.centerImage === 'C') return 'dot';     // 임시: C → 도트
-    if (p.centerImage === 'R') return 'heart';   // 임시: R → 하트
-    return 'dot';  // 임시: null이면 도트
-  })();
+  // ── 점액 (⑧ pitchMode → 모양) ───────────────────────────────────
+  // F → 네모(square), H → 동그라미, B → 섞임
+  const pitchMode   = p.pitchMode || null;
 
-  // 임시: pitchMode F/B/H → 껍질 모양 (참조 코드에 별도 껍질 타입 없음)
-  // 참조 코드의 speech.whaleSong A/B → burst(샤샤샥/점선) 대응 대신:
-  // F → 샤샤샥(burst=true), B → 둘을 섞음(burst=random), H → 점선(burst=false)
-  // 보고: 참조 코드에 pitchMode에 직접 대응하는 껍질 모양 파라미터가 없어서
-  //       burst(파티클 흩어짐 여부)로 임시 대응함. 추후 shells 타입으로 분리 가능
-  const burst = (() => {
-    if (p.pitchMode === 'F') return true;   // 임시: F → 샤샤샥
-    if (p.pitchMode === 'B') return null;   // 임시: B → 섞음(null=50%)
-    if (p.pitchMode === 'H') return false;  // 임시: H → 점선
-    return false;  // 임시: null이면 점선
-  })();
-  // burst=null이면 50% 확률로 결정
-  const burstFinal = (burst === null) ? (Math.random() < 0.5) : burst;
+  // ── 앉는 잎 (EQ 위치) ─────────────────────────────────────────────
+  const lowDb  = typeof p.lowDb  === 'number' ? p.lowDb  : 0;
+  const highDb = typeof p.highDb === 'number' ? p.highDb : 0;
 
-  // 임시: profile.twistAmount는 Snail.twist(애니메이션 위상 값)와 다른 값이므로 사용하지 않음
-  // (task 4장 명시)
-
-  // ── 카드 표시용 ─────────────────────────────────────────────────
+  // ── 카드 표시용 ───────────────────────────────────────────────────
   const dash = (v, fmt) => (v != null) ? fmt(v) : '—';
-
   const _display = {
     volDb:       dash(p.volDb,       v => v.toFixed(1) + ' dB'),
     register:    dash(p.register,    v => ({ LOW: 'A 낮음', MID: 'B 가운데', HIGH: 'C 높음' })[v] || v),
@@ -84,31 +79,19 @@ function mapProfile(profile) {
     highDb:      dash(p.highDb,      v => (v >= 0 ? '+' : '') + v.toFixed(1) + ' dB'),
     maxFreqHz:   dash(p.maxFreqHz,   v => (v / 1000).toFixed(1) + ' kHz'),
     dominantEar: dash(p.dominantEar, v => ({ LEFT: '왼쪽', RIGHT: '오른쪽' })[v] || v),
-    centerImage: dash(p.centerImage, v => ({ L: 'L (별)', C: 'C (도트)', R: 'R (하트)' })[v] || v),
-    pitchMode:   dash(p.pitchMode,   v => ({ F: 'F 바탕음', B: 'B 섞임', H: 'H 배음' })[v] || v),
-    sensitivity: dash(p.sensitivity, v => v.toFixed(0)),
-    earStrength: dash(p.earStrength, v => v.toFixed(0)),
-    pitchIndex:  dash(p.pitchIndex,  v => (v >= 0 ? '+' : '') + v.toFixed(0)),
+    centerImage: dash(p.centerImage, v => ({ L: '왼쪽', C: '가운데', R: '오른쪽' })[v] || v),
+    centerDeg:   dash(p.centerDeg,   v => (v >= 0 ? '+' : '') + v.toFixed(1) + '°'),
+    pitchMode:   dash(p.pitchMode,   v => ({ F: '바탕음', B: '섞임', H: '배음' })[v] || v),
   };
 
-  // ── Snail 생성자 형식으로 반환 ───────────────────────────────────
   return {
-    // Part 1 (참조 코드 형식 유지)
-    volDb,
-    register,
-    bone,
-    low:  lowDb,   // 임시: lowDb → low
-    high: highDb,  // 임시: highDb → high
-    // Part 2
-    maxFreqHz,
-    dominantEar,
-    slimeShape,
-    burst: burstFinal,
-    // 카드 표시
-    _display,
-    // 원본 profile 보관 (디버그용)
-    _raw: p
+    volDb, inkRGB, glowRGB,
+    twistU,
+    dominantEar, earStrength, shellSquare,
+    pitchMode,
+    lowDb, highDb,
+    _display, _raw: p
   };
 }
 
-window.TowerMapping = { mapProfile };
+window.TowerMapping = { mapProfile, centerColor, paletteAt };
