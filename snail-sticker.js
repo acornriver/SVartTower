@@ -16,6 +16,7 @@ function _tRgba(c, a) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 function _tLerp(a, b, t) { return a + (b - a) * t; }
 function _tSq(x) { return x * x; }
 function _tAngDiff(a, b) { return Math.atan2(Math.sin(a - b), Math.cos(a - b)); }
+function snailRandom(min, max) { return _tLerp(min, max, Math.random()); }
 function snailWave(u, timeMs) { return 0.015 * Math.sin(u * 60 + timeMs / 300); }
 
 function tScopeStroke(ctx, pts, closed, weight, ink, glow) {
@@ -252,10 +253,10 @@ class SnailArt {
     this.nextSlime = Math.max(this.nextSlime ?? now, now - 100);
     while (this.nextSlime <= now) {
       this.particles.push({
-        x: this.tailX + random(-4, 10), y: SNAIL_ART.ground - random(0, 5),
-        vx: random(...SLIME.speed), vy: random(-3, 3), size: random(...SLIME.size),
-        born: this.nextSlime, life: SLIME.lifeMs * random(0.6, 1),
-        square: mode === 'F' || (mode === 'B' && random() < 0.5),
+        x: this.tailX + snailRandom(-4, 10), y: SNAIL_ART.ground - snailRandom(0, 5),
+        vx: snailRandom(...SLIME.speed), vy: snailRandom(-3, 3), size: snailRandom(...SLIME.size),
+        born: this.nextSlime, life: SLIME.lifeMs * snailRandom(0.6, 1),
+        square: mode === 'F' || (mode === 'B' && Math.random() < 0.5),
       });
       this.nextSlime += interval;
     }

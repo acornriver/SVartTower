@@ -114,3 +114,19 @@ Firebase Console → App Check → 웹 앱 → 허용 도메인에 `acornriver.g
 - `cloud/config.js`의 기타 미확정 항목
 
 모두 `cloud/config.js` 에서 조정한다 (SVart에서 먼저 수정 후 복사).
+
+
+## 관객용 모바일 QR 연결
+
+관객용 페이지는 같은 GitHub Pages 사이트의 `/mobile/`에 있습니다. SVart의 QR 표시 기능을 연결할 때 SVart의 `CloudConfig.MOBILE_URL`에 `https://acornriver.github.io/SVartTower/mobile/`을 설정하고, 검사 결과를 타워로 보낸 뒤 QR 대상 URL을 만듭니다.
+
+```js
+const mobile = new URL(window.CloudConfig.MOBILE_URL);
+if (tourState().earId) mobile.searchParams.set('ear', tourState().earId);
+mobile.searchParams.set('code', window.EAR_RESULT.code);
+// mobile.href를 QR 생성기에 넘깁니다.
+```
+
+`ear`에는 Firestore의 문서 ID를 넣습니다. `code`를 함께 보내면 업로드가 진행 중이거나 연결이 끊겼을 때도 코드가 입력되고 근사 EQ로 들을 수 있습니다. Firebase 에뮬레이터는 모바일 주소의 `?emulator=1`로 사용합니다. 로컬 가짜 데이터 모드에서 `?mock=1&code=IWS-RLF%2813.2k%2F6%29`로 코드 자동 입력을 확인할 수 있습니다.
+
+`mobile/audio/`의 세 녹음은 SVart의 `media/audio/`에서 가져왔습니다. 원본이 바뀌면 같은 파일명으로 교체합니다.

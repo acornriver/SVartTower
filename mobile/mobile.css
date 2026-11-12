@@ -1,0 +1,48 @@
+:root {
+  color-scheme: dark;
+  font-family: system-ui, sans-serif;
+  color: #f0efe7;
+  background: #101110;
+  --line: #383c35;
+  --accent: #d6e493;
+  --muted: #b4b8aa;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+.site-header, main { max-width: 58rem; margin: auto; padding-inline: clamp(1rem, 5vw, 3rem); }
+.site-header {
+  display: flex; justify-content: space-between; gap: 1rem;
+  padding-block: 1.1rem; border-bottom: 1px solid var(--line);
+  font-size: .82rem; color: var(--muted);
+}
+main { padding-bottom: 3rem; }
+h1 { font-size: clamp(3rem, 12vw, 6.5rem); line-height: 1; letter-spacing: -.08em; margin: 2.5rem 0 1.5rem; }
+h2 { margin: 0 0 .85rem; font-size: 1.35rem; }
+section { border-top: 1px solid var(--line); padding-block: 1.4rem; }
+p { line-height: 1.55; }
+label { display: block; margin-bottom: .45rem; font-size: .88rem; font-weight: 650; }
+button, input, select {
+  font: inherit; color: inherit; background: #191b17; border: 1px solid var(--line);
+  border-radius: .35rem; min-height: 2.75rem; padding: .55rem .75rem;
+}
+button { cursor: pointer; }
+button:disabled { cursor: default; color: #919586; }
+button[aria-pressed="true"]:not(:disabled), .input-row button, #play:not(:disabled) {
+  color: #181c12; background: var(--accent); border-color: var(--accent); font-weight: 650;
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.input-row, .eq-switch { display: flex; gap: .5rem; }
+input { min-width: 0; flex: 1; font: 1rem ui-monospace, monospace; }
+.muted { color: var(--muted); font-size: .88rem; margin: .65rem 0; }
+.own-preview {
+  width: 100%; height: auto; max-width: 32rem; margin-top: 1rem;
+  background: #050605; border: 1px solid var(--line); border-radius: .4rem;
+}
+.ear-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr)); gap: .55rem; }
+.ear-card { display: flex; flex-direction: column; align-items: center; min-width: 0; padding: .3rem .35rem .7rem; }
+.ear-card[aria-pressed="true"]:not(:disabled) { color: var(--accent); background: #191b17; }
+.ear-card canvas { display: block; width: 100%; height: auto; }
+.ear-card span { overflow-wrap: anywhere; font: .78rem ui-monospace, monospace; }
+#track, audio { display: block; width: 100%; max-width: 28rem; margin-bottom: .75rem; }
+.eq-switch { flex-wrap: wrap; margin-bottom: .75rem; }
+[hidden] { display: none !important; }

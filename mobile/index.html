@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101110">
+  <title>청감 타워 · 관객용</title>
+  <link rel="stylesheet" href="mobile.css">
+  <script defer src="../cloud/schema.js"></script>
+  <script defer src="../cloud/config.js"></script>
+  <script defer src="../cloud/firebase.js"></script>
+  <script defer src="../cloud/feed.js"></script>
+  <script defer src="../mapping.js"></script>
+  <script defer src="../snail-sticker.js"></script>
+  <script defer src="ear-code.js"></script>
+  <script defer src="audio.js"></script>
+  <script defer src="mobile.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <span>모든 귀는 [ ] 이다</span>
+    <span>북서울미술관</span>
+  </header>
+  <main>
+    <h1>청감 타워</h1>
+    <section class="own" aria-labelledby="own-title">
+      <h2 id="own-title">내 달팽이</h2>
+      <form id="code-form">
+        <label for="ear-code">청감 코드</label>
+        <div class="input-row">
+          <input id="ear-code" type="text" placeholder="IWS-RLF" maxlength="32"
+            autocomplete="off" autocapitalize="characters" spellcheck="false"
+            aria-describedby="code-help code-status">
+          <button type="submit">적용</button>
+        </div>
+        <p id="code-help" class="muted">영문만 입력해도 달팽이를 볼 수 있어요. 예시 IWS-RLF(13.2k/6)</p>
+        <p id="code-status" class="muted" role="status" hidden></p>
+      </form>
+      <canvas id="own-preview" class="own-preview" width="440" height="248"
+        role="img" aria-label="내 청감 코드로 그린 달팽이" hidden></canvas>
+    </section>
+
+    <section aria-labelledby="others-title">
+      <h2 id="others-title">다른 달팽이</h2>
+      <p id="feed-status" class="muted" role="status">타워에 도착한 달팽이를 불러오는 중이에요.</p>
+      <div id="ears" class="ear-grid" aria-label="도착한 달팽이"></div>
+    </section>
+
+    <section id="listen" aria-labelledby="listen-title">
+      <h2 id="listen-title" tabindex="-1">같은 소리, 다른 귀</h2>
+      <p id="comparison" class="muted">다른 달팽이를 선택하면 내 EQ와 비교할 수 있어요.</p>
+      <label for="track">사운드스케이프</label>
+      <select id="track">
+        <option value="water">당현천 물소리</option>
+        <option value="train-go">중계역 지하철</option>
+        <option value="car-move">북서울미술관 앞 지나가는 차</option>
+      </select>
+      <div class="eq-switch" role="group" aria-label="들을 EQ">
+        <button type="button" id="own-eq" aria-pressed="true">내 EQ</button>
+        <button type="button" id="other-eq" aria-pressed="false" disabled>이 달팽이 EQ</button>
+      </div>
+      <audio id="player" controls playsinline preload="none" hidden aria-label="사운드스케이프 재생"></audio>
+      <button id="play" type="button" disabled>재생</button>
+      <p id="audio-status" class="muted" role="status" hidden></p>
+    </section>
+  </main>
+</body>
+</html>

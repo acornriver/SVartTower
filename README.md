@@ -20,6 +20,12 @@ python3 -m http.server 8766
 | 가짜 데이터와 15초마다 새 달팽이 도착 | [localhost:8766/?mock=1&arrive=15](http://localhost:8766/?mock=1&arrive=15) |
 | 실제 Firebase 피드 | [localhost:8766](http://localhost:8766/) |
 
+## 관객용 모바일
+
+[관객용 청감 타워](https://acornriver.github.io/SVartTower/mobile/) · [로컬 가짜 데이터 모드](http://localhost:8766/mobile/?mock=1)
+
+`IWS-RLF`처럼 영문만 입력해 달팽이를 그려보고, 다른 달팽이를 선택해 세 사운드스케이프에서 **내 EQ**와 **이 달팽이 EQ**를 전환할 수 있습니다. 코드로는 근사 EQ를 만들고, QR의 검사 기록을 불러오면 저장된 EQ 값을 적용합니다. 비교 재생은 검사 당시의 개인별 음량 대신 공통 음량 기준을 사용합니다.
+
 ## 화면 조작
 
 | 조작 | 기능 |
