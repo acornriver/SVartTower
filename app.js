@@ -2,7 +2,7 @@
  * 청감 타워 — 피드 연결, 무대 관리, 디버그 창, 운영용 장치
  *
  * 화면은 tower.js(ref/sketch (14).js 포트, 네온 버전)가 그립니다. 여기서는 cloud/feed.js에서 받은 귀를
- * 달팽이 그림으로 만들어 타워에 접속시킵니다. cloud/와 mapping.js는 건드리지 않습니다.
+ * 달팽이 그림으로 만들어 타워에 접속시킵니다. mapping.js와 snail-sticker.js가 결과 화면의 외형을 만듭니다.
  * 11/12 사용자 선택: 소개 카드와 마리 수 글자는 뺌 (스케치의 인식 박스·청감 코드 이름표가 대신함).
  */
 'use strict';
@@ -13,10 +13,9 @@ const ARRIVE_QUEUE_GAP = 2000;    // 여러 마리가 한꺼번에 올 때 간�
 const BUILD_EVERY_MS    = 60;      // 달팽이 그림 하나를 만드는 간격 (처음 불러올 때 화면이 멈추지 않게)
 const RELOAD_HOUR      = 5;       // 새벽 5시 새로고침
 const DEFAULT_HZ       = 14000;   // maxFreqHz가 없을 때 앉는 높이 (mapping.js의 기본값과 같음)
-const SIZE_BY_VOLUME   = [0.8, 1.2]; // volDb -40..0 → 달팽이 크기 배율 (임시, Claude가 정함)
 
 let earPool = [];          // 무대에 못 올라간 귀 (최근 POOL_MAX개)
-let buildQueue = [];       // { ear, animate } 스티커를 만들 차례
+let buildQueue = [];       // { ear, animate } 달팽이 그림을 만들 차례
 let arriveAt = 0;          // 다음 도착을 띄울 수 있는 시각
 let totalCount = 0;
 let rotateTimer = 0;
@@ -79,15 +78,15 @@ function fillFromPool() {
 
 // 귀 하나를 달팽이 그림으로 만들어 타워에 올림. animate면 포탈로 접속해 들어옴
 function putOnTower(ear, animate) {
-  const pf = window.TowerMapping.mapProfile(ear.profile);
-  const img = makeSnailImage(pf, hashSeed(ear.earId));
+  const profile = mapProfile(ear.profile, ear.v ?? ear.codeVersion);
+  const art = new SnailArt(profile, hashSeed(ear.earId), millis());
   const raw = ear.profile?.maxFreqHz;
   const hz = typeof raw === 'number' && Number.isFinite(raw) ? raw : DEFAULT_HZ;
-  const sn = addSnail(hz, img, ear.earId, animate);   // MAX_SNAILS를 넘으면 가장 오래된 달팽이가 빠짐
+  const sn = addSnail(hz, art.canvas, ear.earId, animate);   // MAX_SNAILS를 넘으면 가장 오래된 달팽이가 빠짐
   sn.ear = ear;
-  sn.pf = pf;
+  sn.art = art;
   sn.code = ear.code || null;                          // 이름표는 청감 코드
-  sn.sz = map(pf.volDb, -40, 0, SIZE_BY_VOLUME[0], SIZE_BY_VOLUME[1], true);
+  sn.sz = 1; // 볼륨에 따른 크기는 SVart 렌더러에서 적용
   if (!animate) sn.pause = millis() / 1000 + random(0, 3);
 }
 
@@ -126,6 +125,10 @@ const DBG_KEYS = [
 ];
 let dbgStats = null;
 let dbgButtons = [];
+let dbgSnailSelect;
+let dbgSnailPreview;
+let dbgSnailOptions = [];
+let dbgSelectedSnail = '';
 
 window.towerKey = function (k) {
   if (k === 'f' || k === 'F') fullscreen(!fullscreen());
@@ -139,6 +142,7 @@ function toggleDebug() {
   const panel = document.getElementById('debug-panel');
   if (!dbgStats) buildDebugPanel(panel);
   panel.classList.toggle('visible', debugMode);
+  if (debugMode) updateDebug();
   document.body.classList.toggle('debug', debugMode);   // 마우스 커서 보이기
 }
 
@@ -164,7 +168,7 @@ function sendLocalTestSnail() {
       earId: id, code: '시험 달팽이', name: null, lang: 'ko', createdAt: Date.now(), hidden: false,
       profile: {
         volDb: random(-36, -6), lowDb: random(-8, 8), highDb: random(-8, 8), register: pick(['LOW', 'MID', 'HIGH']),
-        maxFreqHz: Math.round(hz), centerDeg: random(-60, 60), centerImage: pick(['L', 'C', 'R']),
+        maxFreqHz: Math.round(hz), twistAmount: (hz - 8000) / 12000, centerDeg: random(-60, 60), centerImage: pick(['L', 'C', 'R']),
         dominantEar: pick(['LEFT', 'RIGHT']), earStrength: random(40, 100), pitchMode: pick(['F', 'B', 'H']),
       },
     },
@@ -196,6 +200,21 @@ function buildDebugPanel(panel) {
   btn(etc, '달팽이 비우기', resetAll);
   btn(etc, '전체화면', () => fullscreen(!fullscreen()));
 
+  const preview = row('달팽이');
+  dbgSnailSelect = el('select');
+  dbgSnailSelect.setAttribute('aria-label', '확대할 달팽이');
+  dbgSnailSelect.addEventListener('change', () => {
+    dbgSelectedSnail = dbgSnailSelect.value;
+    updateSnailPreview(onTower());
+  });
+  preview.appendChild(dbgSnailSelect);
+  dbgSnailPreview = el('canvas', 'dbg-snail-preview');
+  dbgSnailPreview.width = 440;
+  dbgSnailPreview.height = 244;
+  dbgSnailPreview.setAttribute('aria-label', '선택한 달팽이 확대 보기');
+  dbgSnailPreview.hidden = true;
+  panel.appendChild(dbgSnailPreview);
+
   dbgStats = el('pre', 'dbg-stats');
   panel.appendChild(dbgStats);
   const keys = el('div', 'dbg-keys');
@@ -216,14 +235,40 @@ function resetAll() {
 
 function updateDebug() {
   if (!debugMode || !dbgStats) return;
+  const stage = onTower();
+  updateSnailPreview(stage);
   if (frameCount % 15 === 0) refreshDebugButtons();   // 키로 바꾼 것도 버튼에 반영
   dbgStats.textContent = [
     `모드: ${IS_MOCK ? '테스트(가짜 데이터)' : IS_EMULATOR ? '에뮬레이터' : '실제 DB'}`,
     `fps: ${frameRate().toFixed(1)}`,
-    `타워: ${onTower().length}/${CFG.MAX_SNAILS}   풀: ${earPool.length}   만들 차례: ${buildQueue.length}`,
+    `타워: ${stage.length}/${CFG.MAX_SNAILS}   풀: ${earPool.length}   만들 차례: ${buildQueue.length}`,
     `총: ${totalCount}   피드 재연결: ${window._feedReconnectCount ?? 0}`,
     towerStatus(),
   ].join('\n');
+}
+
+function updateSnailPreview(stage) {
+  if (stage.length !== dbgSnailOptions.length || stage.some((sn, i) => sn !== dbgSnailOptions[i])) {
+    dbgSnailOptions = stage;
+    if (!stage.some(sn => sn.id === dbgSelectedSnail)) dbgSelectedSnail = '';
+    dbgSnailSelect.replaceChildren(
+      new Option(stage.length ? '달팽이 선택' : '타워에 달팽이 없음', ''),
+      ...stage.map(sn => new Option(`${sn.code || '청감 코드 없음'} · ${sn.id}`, sn.id))
+    );
+    dbgSnailSelect.disabled = stage.length === 0;
+    dbgSnailSelect.value = dbgSelectedSnail;
+  }
+  const snail = stage.find(sn => sn.id === dbgSelectedSnail);
+  dbgSnailPreview.hidden = !snail;
+  if (!snail) return;
+  const preview = dbgSnailPreview.getContext('2d');
+  const now = millis();
+  preview.clearRect(0, 0, dbgSnailPreview.width, dbgSnailPreview.height);
+  preview.save();
+  preview.translate(68, 0);
+  snail.art.drawSlime(preview, now);
+  snail.art.draw(preview, now);
+  preview.restore();
 }
 
 function acquireWakeLock() {

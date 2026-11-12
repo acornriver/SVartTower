@@ -614,8 +614,9 @@ function drawSnail(sn, now, back) {
   const p = project(base);
   const col = colorAt(sn.s);
   const moving = sn.state === 'live' && now >= sn.pause;
-  const w = CFG.SNAIL_SIZE * sn.sz * p[3] * (moving ? 1 + 0.04 * Math.sin(sn.ph) : 1) * mixN(0.3, 1, sn.reveal);
+  const w = CFG.SNAIL_SIZE * sn.sz * (sn.art ? 1.5 : 1) * p[3] * (moving ? 1 + 0.04 * Math.sin(sn.ph) : 1) * mixN(0.3, 1, sn.reveal);
   const h = w * sn.aspect;
+  const top = sn.art ? -h * SNAIL_ART.ground / SNAIL_ART.height : -h;
   const ahead = project(helix(clampN(sn.s + 0.004 * sn.dir, 0, 1)));
   const flip = (ahead[0] >= p[0]) !== CFG.SNAIL_FACES_RIGHT;
   const dim = back ? 0.5 : 1;
@@ -630,7 +631,21 @@ function drawSnail(sn, now, back) {
 
   ctx.save();
   ctx.translate(p[0], p[1]);
-  if (flip) { ctx.scale(-1, 1); }
+  if (flip && !sn.art) { ctx.scale(-1, 1); }
+  if (sn.art) {
+    const nowMs = now * 1000;
+    sn.art.renderSprite(nowMs);
+    if (sn.state === 'live') {
+      sn.art.updateSlime(nowMs);
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = dim;
+      ctx.translate(-w / 2, top);
+      ctx.scale(w / SNAIL_ART.width, h / SNAIL_ART.height);
+      sn.art.drawSlime(ctx, nowMs);
+      ctx.restore();
+    }
+  }
   ctx.globalCompositeOperation = 'screen';
   if (sn.reveal < 1) {
     // 접속 중: 가로 줄 단위로 어긋나며 나타난다
@@ -640,15 +655,15 @@ function drawSnail(sn, now, back) {
       if (noise(sn.seed + r * 0.7, now * 9) > sn.reveal * 1.25) { continue; }
       const off = (noise(sn.seed + r * 1.3, now * 14) - 0.5) * w * 0.9 * (1 - sn.reveal);
       ctx.globalAlpha = dim * (0.5 + 0.5 * sn.reveal);
-      ctx.drawImage(sn.img, 0, r * sh, sn.img.width, sh, -w / 2 + off, -h + (r / rows) * h, w, h / rows + 0.6);
+      ctx.drawImage(sn.img, 0, r * sh, sn.img.width, sh, -w / 2 + off, top + (r / rows) * h, w, h / rows + 0.6);
     }
   } else {
     ctx.globalAlpha = dim;
-    ctx.drawImage(sn.img, -w / 2, -h, w, h);
+    ctx.drawImage(sn.img, -w / 2, top, w, h);
   }
   ctx.restore();
   ctx.globalAlpha = 1;
-  sn.box = [p[0] - w / 2, p[1] - h, w, h];
+  sn.box = [p[0] - w / 2, p[1] + top, w, h];
 }
 
 /* ───────────── 포탈 ───────────── */
@@ -1020,7 +1035,7 @@ function windowResized() {
 }
 
 function mousePressed(e) {
-  if (e && e.target && e.target.tagName !== 'CANVAS') { pressOnCanvas = false; return; }   // 포트: 디버그 창을 누를 때는 타워를 돌리지 않음
+  if (e && e.target && !e.target.closest?.('#stage canvas')) { pressOnCanvas = false; return; }   // 포트: 디버그 창을 누를 때는 타워를 돌리지 않음
   pressOnCanvas = mouseX >= 0 && mouseX <= width && mouseY >= 0 && mouseY <= height;
   dragMoved = 0;
 }
@@ -1036,7 +1051,15 @@ function mouseReleased() {
   pressOnCanvas = false;
 }
 
-function keyPressed() {
+function keyPressed(event) {
+  if (event?.target?.tagName === 'SELECT') {
+    if (key === 'd' || key === 'D') {
+      event.target.blur();
+      window.towerKey?.(key);
+      return false;
+    }
+    return;
+  }
   if (window.towerKey) { window.towerKey(key); }   // 포트: D 디버그 창, F 전체화면, R 비우기 (app.js)
   if (document.activeElement && document.activeElement.tagName === 'BUTTON') { document.activeElement.blur(); }
   if (key === ' ') { if (CFG.DEMO) { sendTestSnail(); } return false; }

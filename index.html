@@ -16,7 +16,7 @@
   body.debug { cursor: default; }
   #debug-panel {
     display: none;
-    position: fixed; top: 12px; right: 12px; width: 400px; max-height: calc(100vh - 24px); overflow: auto;
+    position: fixed; top: 12px; right: 12px; width: min(460px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto;
     background: rgba(12,13,18,0.9); color: #c8ccd8;
     font: 12px/1.6 'Noto Sans KR', system-ui, sans-serif;
     padding: 12px 14px; border-radius: 8px; z-index: 100;
@@ -30,6 +30,12 @@
   }
   #debug-panel button:hover { border-color: #8a8fa2; }
   #debug-panel button.on { background: #e4e6ee; color: #14151a; border-color: #e4e6ee; }
+  #debug-panel select {
+    flex: 1; min-width: 0; padding: 3px 6px; color: inherit; font: inherit;
+    background: #23252e; border: 1px solid #3a3d4a; border-radius: 4px;
+  }
+  .dbg-snail-preview { width: 100%; height: auto; margin-bottom: 8px; background: #000; }
+  .dbg-snail-preview[hidden] { display: none; }
   .dbg-stats { margin: 6px 0 8px; padding-top: 8px; border-top: 1px solid #2c2e38; white-space: pre-wrap; font: 11px/1.6 ui-monospace, 'IBM Plex Mono', monospace; }
   .dbg-keys { padding-top: 8px; border-top: 1px solid #2c2e38; color: #9a9fb0; }
   .dbg-keys b { display: inline-block; width: 64px; color: #e4e6ee; font-weight: 600; }
