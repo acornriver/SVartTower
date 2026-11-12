@@ -31,6 +31,7 @@ const CFG = {
 
   SNAIL_SIZE: 84,            // 달팽이 가로 크기 (타워 높이 600 기준)
   SNAIL_FACES_RIGHT: true,   // 넘어오는 달팽이 그림이 오른쪽을 보고 있으면 true
+  ARRIVAL_SPREAD: 0.12,      // 도착 위치가 고역 한계 기준점에서 벗어날 수 있는 최대 거리 (둘레길 전체 = 1)
   WANDER: 0.07,              // 달팽이가 제자리에서 벗어나 돌아다니는 범위 (둘레길 전체 = 1)
   MAX_SNAILS: 40,
   PORTAL_SEC: 3.6,           // 포탈이 열렸다 닫히는 시간
@@ -526,11 +527,24 @@ function receiveSnail(msg) {
   }
 }
 
+function snailHome(hz, id) {
+  const center = clampN(1 - hzToUnit(hz), 0.015, 0.985);
+  // 같은 ID는 새로고침하거나 대기 풀에서 돌아와도 같은 곳에 배치한다.
+  let hash = 2166136261;
+  for (const ch of id) hash = Math.imul(hash ^ ch.codePointAt(0), 16777619);
+  hash = Math.imul(hash ^ (hash >>> 16), 0x45d9f3b);
+  const fraction = ((hash ^ (hash >>> 16)) >>> 0) / 2 ** 32;
+  // 허용 범위를 먼저 자르면 꼭대기나 바닥에 여러 마리가 겹쳐 붙지 않는다.
+  return mixN(Math.max(0.015, center - CFG.ARRIVAL_SPREAD),
+    Math.min(0.985, center + CFG.ARRIVAL_SPREAD), fraction);
+}
+
 function addSnail(hz, img, id, viaPortal) {
-  const home = clampN(1 - hzToUnit(hz), 0.015, 0.985);   // 고음일수록 위(s 가 작음)
   snailSeq++;
+  const snailId = id == null ? 'SNAIL_' + String(snailSeq).padStart(2, '0') : String(id);
+  const home = snailHome(hz, snailId);
   const sn = {
-    id: id == null ? 'SNAIL_' + String(snailSeq).padStart(2, '0') : String(id),
+    id: snailId,
     hz, img, aspect: (img.height || 200) / (img.width || 300),
     home, s: home, target: home, dir: 1,
     speed: random(9, 18), pause: 0, ph: random(Math.PI * 2), sz: random(0.9, 1.1),
