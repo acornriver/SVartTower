@@ -2,11 +2,12 @@
  * 청감 타워 — 달팽이 스티커
  *
  * 달팽이 모양은 예전 index.html의 Snail 클래스(SVart visuals.js 포트)를 그대로 옮긴 것입니다.
- * 모양 코드는 고치지 않고, 한 장의 그림으로 그린 뒤 tower.js의 makeSticker로 흰 종이 스티커를 만듭니다.
- * 스티커는 멈춘 그림이라 점액(움직이는 파티클)은 그리지 않습니다.
+ * 모양 코드는 고치지 않고, 검은 바탕 위에 한 장의 그림으로 그립니다 (makeSnailImage).
+ * 11/12부터 흰 종이 스티커 대신 선만 빛나게 합성합니다 (사용자 선택, ref/sketch (14).js 방식).
+ * 멈춘 그림이라 점액(움직이는 파티클)은 그리지 않습니다.
  */
 
-// 스티커 안쪽 바탕 (검정). 사용자 선택 11/10: 검정 바탕 + 흰 종이 테두리
+// 그림 바탕 (검정). 합성할 때 사라진다
 const BG = [4, 5, 10];
 const HELIX = { bodyTwists: [3, 22], shellTwists: [4, 30], sep: 0.075, rungEvery: 3, spinSpeed: 1.4 };
 const RED_DOT = [255, 59, 31];
@@ -269,19 +270,38 @@ class SnailShape {
 // 그림 크기 (Claude가 정함). 꼬리·머리·더듬이가 가장 길 때도 잘리지 않게 잡음
 const STICKER_ART = { W: 400, H: 250, R: 46, x: 190, ground: 232 };
 
-// pf(mapping.js) → { img, aspect, foot } 스티커. seed가 같으면 같은 그림
-function makeSnailSticker(pf, seed) {
-  const pg = createGraphics(STICKER_ART.W, STICKER_ART.H);
-  pg.pixelDensity(1);
-  pg.background(BG[0], BG[1], BG[2]);
+// pf(mapping.js) → 검은 바탕의 달팽이 그림(canvas). seed가 같으면 같은 그림.
+// tower.js가 'screen'으로 합성해서 검은 바탕은 사라지고 선만 빛난다. 여백을 잘라 내서 그림 아래 끝이 발밑이다.
+function makeSnailImage(pf, seed) {
+  const cv = document.createElement('canvas');
+  cv.width = STICKER_ART.W; cv.height = STICKER_ART.H;
+  const c = cv.getContext('2d');
+  c.fillStyle = `rgb(${BG[0]},${BG[1]},${BG[2]})`;
+  c.fillRect(0, 0, cv.width, cv.height);
   const frozen = { millis: () => (seed % 60) * 1000 };   // 파형이 멈춘 한 순간
   const sn = new SnailShape(pf, seed);
   const shape = sn._bodyShape(frozen);
-  const ctx = pg.drawingContext;
-  sn._drawAntennae(ctx, shape, frozen);
-  sn._drawBody(ctx, shape, frozen);
-  sn._drawShell(ctx, shape, frozen);
-  const st = makeSticker(pg);
-  pg.remove();
-  return st;
+  sn._drawAntennae(c, shape, frozen);
+  sn._drawBody(c, shape, frozen);
+  sn._drawShell(c, shape, frozen);
+
+  // 선이 있는 범위만 남김
+  const px = c.getImageData(0, 0, cv.width, cv.height).data;
+  let x0 = cv.width, x1 = 0, y0 = cv.height, y1 = 0;
+  for (let y = 0; y < cv.height; y++) {
+    for (let x = 0; x < cv.width; x++) {
+      const i = 4 * (y * cv.width + x);
+      if (px[i] + px[i + 1] + px[i + 2] > 110) {
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+    }
+  }
+  if (x1 <= x0 || y1 <= y0) return cv;
+  const pad = 6;
+  x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad);
+  x1 = Math.min(cv.width - 1, x1 + pad); y1 = Math.min(cv.height - 1, y1 + 2);
+  const out = document.createElement('canvas');
+  out.width = x1 - x0 + 1; out.height = y1 - y0 + 1;
+  out.getContext('2d').drawImage(cv, x0, y0, out.width, out.height, 0, 0, out.width, out.height);
+  return out;
 }

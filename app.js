@@ -1,36 +1,29 @@
 /**
- * 청감 타워 — 피드 연결, 무대 관리, 카드·마리 수, 운영용 장치
+ * 청감 타워 — 피드 연결, 무대 관리, 디버그 창, 운영용 장치
  *
- * 화면은 tower.js(ref/tower.js 포트)가 그립니다. 여기서는 cloud/feed.js에서 받은 귀를
- * 달팽이 스티커로 만들어 타워에 올립니다. cloud/와 mapping.js는 건드리지 않습니다.
+ * 화면은 tower.js(ref/sketch (14).js 포트, 네온 버전)가 그립니다. 여기서는 cloud/feed.js에서 받은 귀를
+ * 달팽이 그림으로 만들어 타워에 접속시킵니다. cloud/와 mapping.js는 건드리지 않습니다.
+ * 11/12 사용자 선택: 소개 카드와 마리 수 글자는 뺌 (스케치의 인식 박스·청감 코드 이름표가 대신함).
  */
 'use strict';
 
 const POOL_MAX         = 500;     // 대기 풀 최대 크기
 const ROTATE_EVERY     = 20000;   // 무대 교체 간격 ms (임시, Claude가 정함)
-const CARD_EVERY       = 7000;    // 카드 순환 간격 ms (임시, Claude가 정함)
 const ARRIVE_QUEUE_GAP = 2000;    // 여러 마리가 한꺼번에 올 때 간격 ms
-const CARD_ARRIVE_HOLD = 14000;   // 도착 뒤 카드 고정 시간 ms (비행 8초 + 6초, Claude가 정함)
-const BUILD_EVERY_MS    = 60;      // 스티커 하나를 만드는 간격 (처음 불러올 때 화면이 멈추지 않게)
-const BURNIN_INTERVAL  = 2 * 60 * 1000;
-const BURNIN_DRIFT     = 3;
+const BUILD_EVERY_MS    = 60;      // 달팽이 그림 하나를 만드는 간격 (처음 불러올 때 화면이 멈추지 않게)
 const RELOAD_HOUR      = 5;       // 새벽 5시 새로고침
 const DEFAULT_HZ       = 14000;   // maxFreqHz가 없을 때 앉는 높이 (mapping.js의 기본값과 같음)
-const SIZE_BY_VOLUME   = [0.8, 1.2]; // volDb -40..0 → 스티커 크기 배율 (임시, Claude가 정함)
+const SIZE_BY_VOLUME   = [0.8, 1.2]; // volDb -40..0 → 달팽이 크기 배율 (임시, Claude가 정함)
 
 let earPool = [];          // 무대에 못 올라간 귀 (최근 POOL_MAX개)
 let buildQueue = [];       // { ear, animate } 스티커를 만들 차례
 let arriveAt = 0;          // 다음 도착을 띄울 수 있는 시각
 let totalCount = 0;
-let cardTarget = null;
-let cardTimer = 0;
-let cardLock = 0;
 let rotateTimer = 0;
 let debugMode = false;
-let burnin = { x: 0, y: 0, nextAt: 0 };
 let feedStarted = false;
 
-const onTower = () => [...snails, ...arrivals.map(a => a.sn)].filter(sn => sn.ear);
+const onTower = () => snails.filter(sn => sn.ear);
 const knownIds = () => new Set([...onTower().map(sn => sn.ear.earId), ...earPool.map(e => e.earId), ...buildQueue.map(b => b.ear.earId)]);
 
 function hashSeed(id) {
@@ -72,10 +65,8 @@ function onArrive(ear, { animate }) {
 
 function onRemove(earId) {
   for (let i = snails.length - 1; i >= 0; i--) if (snails[i].ear?.earId === earId) snails.splice(i, 1);
-  for (let i = arrivals.length - 1; i >= 0; i--) if (arrivals[i].sn.ear?.earId === earId) arrivals.splice(i, 1);
   earPool = earPool.filter(e => e.earId !== earId);
   buildQueue = buildQueue.filter(b => b.ear.earId !== earId);
-  if (cardTarget?.ear.earId === earId) { cardTarget = null; cardTimer = 0; }
   fillFromPool();
 }
 
@@ -86,36 +77,28 @@ function fillFromPool() {
   }
 }
 
-// 귀 하나를 스티커로 만들어 타워에 올림. animate면 종이비행기를 타고 옴
+// 귀 하나를 달팽이 그림으로 만들어 타워에 올림. animate면 포탈로 접속해 들어옴
 function putOnTower(ear, animate) {
   const pf = window.TowerMapping.mapProfile(ear.profile);
-  const st = makeSnailSticker(pf, hashSeed(ear.earId));
+  const img = makeSnailImage(pf, hashSeed(ear.earId));
   const raw = ear.profile?.maxFreqHz;
   const hz = typeof raw === 'number' && Number.isFinite(raw) ? raw : DEFAULT_HZ;
-  const sn = animate ? launchSnail(hz, st, ear.earId) : newSnail(hz, st, ear.earId);
+  const sn = addSnail(hz, img, ear.earId, animate);   // MAX_SNAILS를 넘으면 가장 오래된 달팽이가 빠짐
   sn.ear = ear;
   sn.pf = pf;
+  sn.code = ear.code || null;                          // 이름표는 청감 코드
   sn.sz = map(pf.volDb, -40, 0, SIZE_BY_VOLUME[0], SIZE_BY_VOLUME[1], true);
-  if (!animate) {
-    sn.pause = millis() / 1000 + random(0, 3);
-    snails.push(sn);
-    if (snails.length > CFG.MAX_SNAILS) snails.shift();
-  } else {
-    cardTarget = sn;
-    cardLock = millis() + CARD_ARRIVE_HOLD;
-    cardTimer = millis();
-  }
+  if (!animate) sn.pause = millis() / 1000 + random(0, 3);
 }
 
-// 스티커 만들기. 그리는 도중에 새 그래픽을 만들면 WEBGL 상태가 깨져서 draw 밖(타이머)에서 한다.
-// 도착은 2초 간격으로
+// 달팽이 그림 만들기. 한꺼번에 만들면 화면이 멈칫해서 타이머로 하나씩 한다. 도착은 2초 간격으로
 function buildNext() {
   if (!buildQueue.length) return;
   const nowMs = millis();
   if (buildQueue[0].animate && nowMs < arriveAt) return;
   const job = buildQueue.shift();
   if (job.animate) arriveAt = nowMs + ARRIVE_QUEUE_GAP;
-  try { putOnTower(job.ear, job.animate); } catch (e) { console.warn('[tower] 스티커를 못 만듦', job.ear.earId, e); }
+  try { putOnTower(job.ear, job.animate); } catch (e) { console.warn('[tower] 달팽이 그림을 못 만듦', job.ear.earId, e); }
 }
 
 function tick(nowMs) {
@@ -123,130 +106,23 @@ function tick(nowMs) {
   if (nowMs - rotateTimer > ROTATE_EVERY) {
     rotateTimer = nowMs;
     const i = snails.findIndex(sn => sn.ear);
-    if (earPool.length && i >= 0 && onTower().length >= CFG.MAX_SNAILS) {
-      if (cardTarget === snails[i]) { cardTarget = null; cardTimer = 0; }
-      snails.splice(i, 1);
-    }
+    if (earPool.length && i >= 0 && onTower().length >= CFG.MAX_SNAILS) snails.splice(i, 1);
     fillFromPool();
   }
-  // 카드 순환
-  const list = onTower();
-  if (cardTarget && !list.includes(cardTarget)) cardTarget = null;
-  if (nowMs > cardLock && (nowMs - cardTimer > CARD_EVERY || !cardTarget)) {
-    const others = list.filter(sn => sn !== cardTarget);
-    cardTarget = others.length ? others[Math.floor(Math.random() * others.length)] : (list[0] || null);
-    cardTimer = nowMs;
-  }
-  // 번인 방지
-  if (nowMs > burnin.nextAt) {
-    const step = () => Math.round((Math.random() - 0.5) * BURNIN_DRIFT * 2);
-    burnin.x = Math.max(-BURNIN_DRIFT, Math.min(BURNIN_DRIFT, burnin.x + step()));
-    burnin.y = Math.max(-BURNIN_DRIFT, Math.min(BURNIN_DRIFT, burnin.y + step()));
-    burnin.nextAt = nowMs + BURNIN_INTERVAL;
-  }
 }
 
-/* ───────────── 카드와 아래 글자 (tower.js의 앞 레이어 fxL 위에 그림) ───────────── */
-const FONT_KO = 'Noto Sans KR, system-ui, sans-serif';
-const PAPER = [252, 250, 244];
-const INK = [38, 36, 32];
-
-window.towerOverlay = function (pg) {
-  const nowMs = millis();
-  tick(nowMs);
-  drawCard(pg, nowMs);
-  drawFooter(pg);
+window.towerOverlay = function () {
+  tick(millis());
   updateDebug();
 };
-
-function drawCard(pg, nowMs) {
-  const sn = cardTarget;
-  if (!sn) return;
-  const cfg = window.CloudConfig || {};
-  const d = sn.pf._display || {};
-  const arriving = arrivals.some(a => a.sn === sn);
-  const lines = [
-    ['청감 코드', sn.ear.code || '—'],
-    ['볼륨 → 크기', d.volDb],
-    ['음역', d.register],
-    ['저음', d.lowDb],
-    ['고음', d.highDb],
-    ['최고 주파수 → 높이·꼬임', d.maxFreqHz],
-    ['우세 귀', d.dominantEar],
-    ['중앙 → 선 색', d.centerDeg],
-    ['바탕음·배음', d.pitchMode],
-  ];
-  if (cfg.SHOW_NAMES && sn.ear.name) {
-    let name = sn.ear.name;
-    for (const w of (Array.isArray(cfg.BANNED_WORDS) ? cfg.BANNED_WORDS : [])) {
-      name = name.replace(new RegExp(w, 'gi'), '*'.repeat(w.length));
-    }
-    lines.unshift(['이름', name.slice(0, cfg.NAME_MAX_LEN || 12)]);
-  }
-
-  const k = Math.max(0.8, Math.min(1.6, height / 900));   // 화면 높이에 맞춰 키움
-  const lh = 21 * k, w = 250 * k, pad = 16 * k;
-  const artW = w - pad * 2, artH = artW * sn.st.aspect;
-  const h = pad + artH + 10 * k + lines.length * lh + pad + (arriving ? 16 * k : 0);
-  const x = 28 * k + burnin.x;
-  const y = height - h - 64 * k + burnin.y;
-
-  pg.push();
-  pg.noStroke();
-  pg.fill(20, 16, 10, 60);                      // 종이 그림자
-  pg.rect(x + 3 * k, y + 4 * k, w, h, 3 * k);
-  pg.fill(PAPER[0], PAPER[1], PAPER[2]);        // 흰 종이
-  pg.rect(x, y, w, h, 3 * k);
-  let yy = y + pad;
-  pg.textFont(FONT_KO);
-  if (arriving) {
-    pg.fill(214, 70, 40);
-    pg.textSize(11 * k);
-    pg.textAlign(LEFT, TOP);
-    pg.text('▶ 방금 도착', x + pad, yy - 4 * k);
-    yy += 16 * k;
-  }
-  pg.image(sn.st.img, x + pad, yy, artW, artH);  // 타워에 붙은 것과 같은 스티커
-  yy += artH + 10 * k + lh / 2;
-  pg.textSize(12 * k);
-  lines.forEach(([label, val], i) => {
-    const ly = yy + i * lh;
-    pg.textAlign(LEFT, CENTER); pg.fill(124, 120, 110);
-    pg.text(label, x + pad, ly);
-    pg.textAlign(RIGHT, CENTER); pg.fill(INK[0], INK[1], INK[2]);
-    pg.text(val || '—', x + w - pad, ly);
-  });
-  pg.pop();
-}
-
-function drawFooter(pg) {
-  const k = Math.max(0.8, Math.min(1.6, height / 900));
-  const n = totalCount > 0 ? totalCount : onTower().length;
-  pg.push();
-  pg.noStroke();
-  pg.textFont(FONT_KO);
-  pg.textSize(14 * k);
-  const y = height - 22 * k + burnin.y;
-  const put = (txt, x, align) => {
-    pg.textAlign(align, BOTTOM);
-    pg.fill(10, 10, 14, 150); pg.text(txt, x + 1, y + 1);   // 밝은 하늘에서도 읽히게 옅은 그림자
-    pg.fill(255, 235); pg.text(txt, x, y);
-  };
-  put('청감 타워 · 달팽이 ' + n + '마리', 28 * k + burnin.x, LEFT);
-  put('모든 귀는 [ ] 이다', width - 28 * k + burnin.x, RIGHT);
-  pg.pop();
-}
 
 /* ───────────── 키, 디버그, 장시간 운영 ───────────── */
 const IS_MOCK = location.search.includes('mock=1');
 const IS_EMULATOR = location.search.includes('emulator=1');
-const DBG_WEATHER = [[null, '실시간'], ['clear', '맑음'], ['cloud', '흐림'], ['rain', '비'], ['snow', '눈'], ['fog', '안개'], ['storm', '뇌우']];
-const DBG_TIME = [[null, '실시간'], [7.1, '아침'], [12.5, '낮'], [17.3, '저녁'], [22, '밤']];
 const DBG_KEYS = [
   ['D', '이 창 열기/닫기'], ['F', '전체화면'], ['R', '달팽이 비우기'],
-  ['1~6', '맑음·흐림·비·눈·안개·뇌우'], ['0', '실시간 날씨'], ['T', '시간대 바꾸기'],
-  ['O', '자동 회전 켜기/끄기'], ['H', '아래 상태 줄'], ['드래그', '타워 돌리기'],
-  ['스페이스', '시험 달팽이 한 마리 (이 창이 열려 있을 때)'],
+  ['B', '인식 박스·이름표 켜기/끄기'], ['O', '자동 회전 켜기/끄기'], ['P', '다변기 부품 떨어뜨리기'],
+  ['드래그', '타워 돌리기'], ['스페이스', '시험 달팽이 한 마리 (이 창이 열려 있을 때)'],
 ];
 let dbgStats = null;
 let dbgButtons = [];
@@ -311,14 +187,11 @@ function buildDebugPanel(panel) {
   btn(mode, '테스트(가짜)', () => switchMode('mock'), () => IS_MOCK);
   btn(mode, '에뮬레이터', () => switchMode('emulator'), () => IS_EMULATOR);
 
-  const wx = row('날씨');
-  DBG_WEATHER.forEach(([kind, label]) => btn(wx, label, () => setWeatherOverride(kind), () => weatherOverride === kind));
-  const tm = row('시간대');
-  DBG_TIME.forEach(([h, label]) => btn(tm, label, () => setTimeOverride(h), () => hourOverride === h));
-
   const etc = row('기타');
   btn(etc, '자동 회전', () => { orbitOn = !orbitOn; }, () => orbitOn);
-  btn(etc, '상태 줄', () => { hud = !hud; }, () => hud);
+  btn(etc, '인식 박스', () => { CFG.BOXES = !CFG.BOXES; }, () => CFG.BOXES);
+  btn(etc, '주파수 글자', () => { CFG.LABELS = !CFG.LABELS; }, () => CFG.LABELS);
+  btn(etc, '부품 떨어뜨리기', dropPart);
   btn(etc, '시험 달팽이 보내기', sendLocalTestSnail);
   btn(etc, '달팽이 비우기', resetAll);
   btn(etc, '전체화면', () => fullscreen(!fullscreen()));
@@ -337,10 +210,8 @@ function refreshDebugButtons() {
 
 function resetAll() {
   for (let i = snails.length - 1; i >= 0; i--) if (snails[i].ear) snails.splice(i, 1);
-  for (let i = arrivals.length - 1; i >= 0; i--) if (arrivals[i].sn.ear) arrivals.splice(i, 1);
   earPool = [];
   buildQueue = [];
-  cardTarget = null;
 }
 
 function updateDebug() {
@@ -349,10 +220,8 @@ function updateDebug() {
   dbgStats.textContent = [
     `모드: ${IS_MOCK ? '테스트(가짜 데이터)' : IS_EMULATOR ? '에뮬레이터' : '실제 DB'}`,
     `fps: ${frameRate().toFixed(1)}`,
-    `타워: ${onTower().length}/${CFG.MAX_SNAILS} (날아오는 중 ${arrivals.length})`,
-    `풀: ${earPool.length}   만들 차례: ${buildQueue.length}`,
-    `종이비행기: ${pile.length}   총: ${totalCount}`,
-    `피드 재연결: ${window._feedReconnectCount ?? 0}   번인: (${burnin.x}, ${burnin.y})`,
+    `타워: ${onTower().length}/${CFG.MAX_SNAILS}   풀: ${earPool.length}   만들 차례: ${buildQueue.length}`,
+    `총: ${totalCount}   피드 재연결: ${window._feedReconnectCount ?? 0}`,
     towerStatus(),
   ].join('\n');
 }
