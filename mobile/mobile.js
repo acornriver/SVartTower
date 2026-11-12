@@ -4,6 +4,7 @@ const get = id => document.getElementById(id);
 const input = get('ear-code');
 const player = get('player');
 const play = get('play');
+const seek = get('seek');
 const preview = get('own-preview');
 const previewCtx = preview.getContext('2d');
 const comparison = new EarComparison(player);
@@ -11,6 +12,7 @@ const queryParams = new URLSearchParams(location.search);
 const isMock = queryParams.get('mock') === '1';
 const tracks = ['water', 'train-go', 'car-move'];
 const gallery = new Map();
+let visibleEars = [];
 let own = null;
 let ownArt = null;
 let selected = null;
@@ -65,7 +67,7 @@ function useInput(commit = false) {
   const value = input.value.trim();
   const result = parseMobileCode(value);
   if (commit && result) input.value = result.code;
-  setOwn(result, result ? '입력한 코드에서 달팽이와 근사 EQ를 만들었어요.' :
+  setOwn(result, result ? '입력한 코드로 달팽이를 그렸어요. 이 코드에 가까운 소리로 들을 수 있어요.' :
     value && commit ? '코드 형식을 확인해 주세요. 예시 IWS-RLF 또는 IWS-RLF(13.2k/6)' : '');
 }
 
@@ -90,13 +92,23 @@ function makeCard(ear) {
   const label = document.createElement('span');
   label.textContent = ear.code;
   button.append(canvas, label);
-  button.addEventListener('click', () => {
-    selected = ear;
-    refreshGallery();
-    refreshComparison();
-    get('listen-title').focus();
-  });
+  button.addEventListener('click', () => selectMobileEar(ear.earId));
   return button;
+}
+
+function selectMobileEar(id) {
+  if (id === own?.earId) {
+    input.focus();
+    return;
+  }
+  const ear = visibleEars.find(item => item.earId === id);
+  if (!ear) return;
+  selected = ear;
+  side = 'other';
+  refreshGallery();
+  refreshComparison();
+  get('listen').scrollIntoView({ block: 'start' });
+  get('listen-title').focus({ preventScroll: true });
 }
 
 function refreshGallery() {
@@ -108,6 +120,8 @@ function refreshGallery() {
 
 function showEars(list) {
   const visible = list.filter(ear => ear.profile && typeof ear.code === 'string' && ear.code);
+  visibleEars = visible;
+  syncMobileTower(visible);
   const container = get('ears');
   const ids = new Set(visible.map(ear => ear.earId));
   for (const [id, card] of gallery) {
@@ -132,24 +146,23 @@ function showEars(list) {
 
 function refreshComparison() {
   if (!selected) side = 'own';
-  get('own-eq').disabled = !own;
-  get('other-eq').disabled = !own || !selected;
-  get('own-eq').setAttribute('aria-pressed', String(side === 'own'));
-  get('other-eq').setAttribute('aria-pressed', String(side === 'other'));
-  play.disabled = !own;
-  if (!own) {
-    if (!player.paused) player.pause();
-    player.hidden = true;
-    play.hidden = false;
-  }
+  else if (!own) side = 'other';
+  get('own-listening').disabled = !own;
+  get('other-listening').disabled = !selected;
+  get('own-listening').setAttribute('aria-pressed', String(side === 'own'));
+  get('other-listening').setAttribute('aria-pressed', String(side === 'other'));
+  play.disabled = !own && !selected;
+  if (play.disabled && !player.paused) player.pause();
+  get('enter-code').hidden = !!own;
+  updatePlayback();
   comparison.configure(own?.profile, selected?.profile, side);
   get('comparison').textContent = selected
-    ? `선택한 달팽이 ${selected.code}${own ? ' · 재생 중 EQ를 바꿔 들어보세요.' : ' · 비교하려면 내 청감 코드를 입력하세요.'}`
-    : '다른 달팽이를 선택하면 내 EQ와 비교할 수 있어요.';
+    ? `선택한 달팽이 ${selected.code}${own ? ' · 재생 중 두 귀의 소리를 바꿔 들어보세요.' : ' · 내 청감 코드를 입력하면 두 귀의 소리를 비교할 수 있어요.'}`
+    : '타워에서 달팽이를 고르면 그 귀로 들을 수 있어요.';
 }
 
 for (const key of ['own', 'other']) {
-  get(`${key}-eq`).addEventListener('click', () => { side = key; refreshComparison(); });
+  get(`${key}-listening`).addEventListener('click', () => { side = key; refreshComparison(); });
 }
 
 function setTrack() {
@@ -157,14 +170,28 @@ function setTrack() {
   if (tracks.includes(track)) player.src = `audio/${track}.m4a`;
 }
 
+function formatTime(seconds) {
+  const whole = Math.floor(seconds);
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+}
+
+function updatePlayback() {
+  const hasDuration = Number.isFinite(player.duration) && player.duration > 0;
+  seek.disabled = play.disabled || !hasDuration;
+  seek.max = hasDuration ? player.duration : 0;
+  seek.value = hasDuration ? player.currentTime : 0;
+  const elapsed = formatTime(Number(seek.value));
+  get('elapsed').textContent = elapsed;
+  get('duration').textContent = hasDuration ? formatTime(player.duration) : '–:––';
+  seek.setAttribute('aria-valuetext', hasDuration ? `${elapsed} / ${formatTime(player.duration)}` : elapsed);
+  play.textContent = player.paused || player.ended ? '재생' : '일시정지';
+}
+
 function startPlayback() {
   status('audio-status', '');
   if (!player.getAttribute('src')) setTrack();
   try {
-    comparison.play().then(() => {
-      player.hidden = false;
-      play.hidden = true;
-    }).catch(playbackError);
+    comparison.play().catch(playbackError);
   } catch (error) {
     playbackError(error);
   }
@@ -172,16 +199,28 @@ function startPlayback() {
 
 function playbackError(error) {
   if (error?.name === 'AbortError') return;
-  play.hidden = false;
+  if (!player.paused) player.pause();
+  updatePlayback();
   status('audio-status', '소리를 재생하지 못했어요. 다시 재생을 눌러 주세요.');
 }
 
-play.addEventListener('click', startPlayback);
+play.addEventListener('click', () => {
+  if (player.paused || player.ended) startPlayback();
+  else player.pause();
+});
+seek.addEventListener('input', () => {
+  if (!seek.disabled) player.currentTime = Number(seek.value);
+  updatePlayback();
+});
 get('track').addEventListener('change', () => {
-  const wasPlaying = !player.paused;
+  const wasPlaying = !player.paused && !player.ended;
   setTrack();
+  updatePlayback();
   if (wasPlaying) startPlayback();
 });
+for (const event of ['emptied', 'loadedmetadata', 'durationchange', 'timeupdate', 'play', 'pause', 'ended']) {
+  player.addEventListener(event, updatePlayback);
+}
 player.addEventListener('error', () => playbackError());
 
 async function loadGalleryAndQR() {
@@ -229,12 +268,12 @@ async function loadGalleryAndQR() {
         return;
       }
     }
-    status('code-status', own ? '검사 결과를 아직 찾을 수 없어 코드의 근사 EQ를 사용 중이에요.' :
+    status('code-status', own ? '검사 결과를 아직 찾을 수 없어 입력된 코드에 가까운 소리로 들을 수 있어요.' :
       '검사 결과를 찾을 수 없어요. 잠시 뒤 새로고침하거나 청감 코드를 입력해 주세요.');
   } catch {
     if (!gallery.size) status('feed-status', '달팽이 목록을 불러오지 못했어요. 잠시 뒤 새로고침해 주세요.');
     if (validId && revision === inputRevision) status('code-status', own
-      ? '검사 결과에 연결하지 못해 코드의 근사 EQ를 사용 중이에요.'
+      ? '검사 결과에 연결하지 못해 입력된 코드에 가까운 소리로 들을 수 있어요.'
       : '검사 결과에 연결하지 못했어요. 청감 코드를 직접 입력할 수 있어요.');
   }
 }

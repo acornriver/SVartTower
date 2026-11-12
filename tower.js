@@ -29,6 +29,8 @@ const CFG = {
             '#978A87', '#C4B8B0', '#A8B0C1', '#7CA0BA', '#6C9AD1'],
   NEON: 0.85,                // 0 = 원래 팔레트 색, 1 = 완전한 네온
 
+  VIEW_SIZE: 840,            // 타워 투영 기준 크기
+  DEFAULT_CONTROLS: true,    // 관객용은 터치 제스처를 별도로 연결
   SNAIL_SIZE: 84,            // 달팽이 가로 크기 (타워 높이 600 기준)
   SNAIL_FACES_RIGHT: true,   // 넘어오는 달팽이 그림이 오른쪽을 보고 있으면 true
   ARRIVAL_SPREAD: 0.12,      // 도착 위치가 고역 한계 기준점에서 벗어날 수 있는 최대 거리 (둘레길 전체 = 1)
@@ -156,7 +158,7 @@ function helix(s) {
 function updateView() {
   view.cosA = Math.cos(camA); view.sinA = Math.sin(camA);
   view.cosE = Math.cos(CAM.EL); view.sinE = Math.sin(CAM.EL);
-  view.F = CAM.D * Math.min(width / 840, height / 840);
+  view.F = CAM.D * Math.min(width, height) / CFG.VIEW_SIZE;
   view.cx = width * 0.5;
   view.cy = height * 0.5;
 }
@@ -957,7 +959,7 @@ function draw() {
   ctx = drawingContext;
   const dt = Math.min(deltaTime, 60) / 1000;
   const now = millis() / 1000;
-  if (orbitOn && !(mouseIsPressed && pressOnCanvas)) { camA += CFG.ORBIT * dt; }
+  if (orbitOn && !pressOnCanvas) { camA += CFG.ORBIT * dt; }
   updateView();
 
   if (CFG.DEMO && !CFG.SERVER_URL && demoSent < CFG.DEMO_MAX && now - lastDemo > CFG.DEMO_INTERVAL) {
@@ -1049,23 +1051,27 @@ function windowResized() {
 }
 
 function mousePressed(e) {
+  if (!CFG.DEFAULT_CONTROLS) return;
   if (e && e.target && !e.target.closest?.('#stage canvas')) { pressOnCanvas = false; return; }   // 포트: 디버그 창을 누를 때는 타워를 돌리지 않음
   pressOnCanvas = mouseX >= 0 && mouseX <= width && mouseY >= 0 && mouseY <= height;
   dragMoved = 0;
 }
 
 function mouseDragged() {
+  if (!CFG.DEFAULT_CONTROLS) return;
   if (!pressOnCanvas) { return; }
   camA += (mouseX - pmouseX) * 0.006;
   dragMoved += Math.abs(mouseX - pmouseX);
 }
 
 function mouseReleased() {
+  if (!CFG.DEFAULT_CONTROLS) return;
   if (CFG.DEMO && pressOnCanvas && dragMoved < 6) { sendTestSnail(); }
   pressOnCanvas = false;
 }
 
 function keyPressed(event) {
+  if (!CFG.DEFAULT_CONTROLS) return;
   if (event?.target?.tagName === 'SELECT') {
     if (key === 'd' || key === 'D') {
       event.target.blur();
