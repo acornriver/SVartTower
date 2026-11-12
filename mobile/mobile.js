@@ -56,7 +56,8 @@ function setOwn(result, message) {
   own = result;
   if (own?.earId && selected?.earId === own.earId) selected = null;
   ownArt = result ? new SnailArt(mapProfile(result.profile, result.v ?? result.codeVersion), 0, performance.now()) : null;
-  preview.hidden = !ownArt;
+  get('own-specimen').hidden = !ownArt;
+  get('own-code').textContent = result?.code ?? '';
   if (ownArt && previewFrame === null) previewFrame = requestAnimationFrame(paintPreview);
   status('code-status', message);
   refreshGallery();

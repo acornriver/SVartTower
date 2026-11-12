@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#111110">
+  <meta name="theme-color" content="#000000">
   <title>청감 타워 · 관객용</title>
   <link rel="stylesheet" href="mobile.css">
   <script defer src="../cloud/schema.js"></script>
@@ -21,16 +21,18 @@
 </head>
 <body>
   <header class="site-header">
-    <span>모든 귀는 [ ] 이다</span>
-    <span>북서울미술관</span>
+    <span>모든 귀는 [   ] 이다</span>
+    <span>서울시립 북서울미술관</span>
   </header>
   <main>
     <div class="page-title">
+      <p class="eyebrow">Cochlea Tower</p>
       <h1>청감 타워</h1>
       <a class="text-link" href="#own">내 달팽이 <span aria-hidden="true">↓</span></a>
     </div>
     <section id="explore" class="explore" aria-label="청감 타워 둘러보기">
       <div class="tower-frame">
+        <div class="scale" aria-hidden="true"><span><b>20 kHz</b>높은 소리</span><i></i><span><b>20 Hz</b>낮은 소리</span></div>
         <div id="stage" aria-label="회전하는 청감 타워" aria-describedby="tower-help"></div>
         <p id="tower-help"><span aria-hidden="true">↔</span> 좌우로 돌리고 달팽이를 눌러보세요.</p>
       </div>
@@ -53,8 +55,11 @@
         <p id="code-help" class="muted">영문만 입력해도 달팽이가 나타나요. 예시 IWS-RLF(13.2k/6)</p>
         <p id="code-status" class="muted" role="status" hidden></p>
       </form>
-      <canvas id="own-preview" class="own-preview" width="440" height="248"
-        role="img" aria-label="내 청감 코드로 그린 달팽이" hidden></canvas>
+      <figure id="own-specimen" class="specimen" hidden>
+        <canvas id="own-preview" class="own-preview" width="440" height="248"
+          role="img" aria-label="내 청감 코드로 그린 달팽이"></canvas>
+        <figcaption id="own-code"></figcaption>
+      </figure>
     </section>
 
     <section id="listen" aria-labelledby="listen-title">
@@ -69,8 +74,8 @@
         <option value="car-move">북서울미술관 앞 지나가는 차</option>
       </select>
       <div class="listening-switch" role="group" aria-label="들을 귀">
-        <button type="button" id="own-listening" aria-pressed="true">내 귀로 듣기</button>
-        <button type="button" id="other-listening" aria-pressed="false" disabled>이 달팽이의 귀로 듣기</button>
+        <button type="button" id="own-listening" aria-pressed="true"><span class="key" aria-hidden="true">A</span>내 귀로 듣기</button>
+        <button type="button" id="other-listening" aria-pressed="false" disabled><span class="key" aria-hidden="true">B</span>이 달팽이의 귀로 듣기</button>
       </div>
       <audio id="player" playsinline preload="metadata"></audio>
       <div class="playback">
