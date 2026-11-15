@@ -64,10 +64,16 @@ function setOwn(result, message) {
   refreshComparison();
 }
 
+// QR 주소의 code · hue (SVart tour.js의 towerMobileUrl). hue는 0~360 숫자일 때만 씀
+const qrCode = parseMobileCode(queryParams.get('code') ?? '')?.code ?? null;
+const qrHue = (() => { const raw = queryParams.get('hue'), n = Number(raw); return raw !== null && raw !== '' && Number.isFinite(n) && n >= 0 && n <= 360 ? n : null; })();
+
 function useInput(commit = false) {
   const value = input.value.trim();
   const result = parseMobileCode(value);
   if (commit && result) input.value = result.code;
+  // QR로 온 코드면 QR에 담긴 달팽이 색상도 입힘. 색은 코드에 없어서, 검사 결과를 못 불러와도 아이패드와 같은 색이 나오게 함 (11/15)
+  if (result && qrHue !== null && result.code === qrCode) result.profile.hueDeg = qrHue;
   setOwn(result, result ? '입력한 코드로 달팽이를 그렸어요. 이 코드에 가까운 소리로 들을 수 있어요.' :
     value && commit ? '코드 형식을 확인해 주세요. 예시 IWS-RLF 또는 IWS-RLF(13.2k/6)' : '');
 }

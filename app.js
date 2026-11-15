@@ -168,7 +168,7 @@ function sendLocalTestSnail() {
       earId: id, code: '시험 달팽이', name: null, lang: 'ko', createdAt: Date.now(), hidden: false,
       profile: {
         volDb: random(-36, -6), lowDb: random(-8, 8), highDb: random(-8, 8), register: pick(['LOW', 'MID', 'HIGH']),
-        maxFreqHz: Math.round(hz), twistAmount: (hz - 8000) / 12000, centerDeg: random(-60, 60), centerImage: pick(['L', 'C', 'R']),
+        maxFreqHz: Math.round(hz), twistAmount: (hz - 8000) / 12000, centerDeg: random(-60, 60), hueDeg: random(0, 360), centerImage: pick(['L', 'C', 'R']),
         dominantEar: pick(['LEFT', 'RIGHT']), earStrength: random(40, 100), pitchMode: pick(['F', 'B', 'H']),
       },
     },
