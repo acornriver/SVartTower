@@ -1,8 +1,8 @@
 # 청감 타워 · SVartTower
 
-**[관객용 청감 타워](https://acornriver.github.io/SVartTower/)** · [전시장 TV 화면](https://acornriver.github.io/SVartTower/wall/)
+**[관객용 청감 타워](https://allearsare.love/)** · [전시장 TV 화면](https://allearsare.love/wall/)
 
-첫 화면(`/`)은 관객용 모바일이고, 전시장 TV는 `/wall/`에서 엽니다. 예전 `/mobile/` 주소는 첫 화면으로 넘어갑니다.
+첫 화면(`/`)은 관객용 모바일이고, 전시장 TV는 `/wall/`에서 엽니다. 예전 `acornriver.github.io/SVartTower/...`와 `/mobile/` 주소는 새 도메인 첫 화면으로 넘어갑니다.
 
 2026 서울시립 북서울미술관 전시 사운드 프로젝트 《모든 귀는 [ ] 이다》의 전시장 TV 화면입니다. 관람객이 아이패드의 [SVart](https://github.com/acornriver/SVart)에서 청감 검사를 마치고 달팽이를 보내면, 타워에 실시간으로 나타납니다.
 

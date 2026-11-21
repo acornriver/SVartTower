@@ -158,3 +158,4 @@ config.js의 미확정 항목과 같음:
 - `index.html`(관객용)은 공유 파일을 루트에서, 자기 파일을 `mobile/`에서 읽는다. 소리는 `mobile/audio/`. TV는 `wall/index.html`이 `../`로 같은 파일을 읽는다.
 - 예전 `/mobile/` 주소는 `mobile/index.html`이 쿼리를 유지한 채 첫 화면으로 넘긴다.
 - 남은 일: Mac Studio 키오스크 주소를 `/wall/`로 바꾸기, SVart의 `MOBILE_URL`을 첫 화면 주소로 바꾼 뒤 `cloud/` 다시 동기화.
+- 11/21 도메인 연결: `allearsare.love`(Cloudflare DNS). GitHub Pages는 `tower-visual` 브랜치에서 배포된다(`main` 아님). 관객용 `https://allearsare.love/`, TV `https://allearsare.love/wall/`. SVart `MOBILE_URL`도 이 주소로 바꿨다.

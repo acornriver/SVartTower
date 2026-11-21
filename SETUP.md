@@ -8,10 +8,12 @@ git remote add origin https://github.com/acornriver/SVartTower.git
 git push -u origin main
 ```
 
-GitHub → 레포 Settings → Pages → Source: `main` 브랜치, `/ (root)`  
-저장 후 관객용은 `https://acornriver.github.io/SVartTower/`, 전시장 TV는 `https://acornriver.github.io/SVartTower/wall/` 에서 접근 가능.
+GitHub → 레포 Settings → Pages → Source: `tower-visual` 브랜치, `/ (root)`, Custom domain `allearsare.love`  
+관객용은 `https://allearsare.love/`, 전시장 TV는 `https://allearsare.love/wall/`.
 
-**주의**: `main` 푸시 = GitHub Pages 즉시 반영. 반드시 로컬에서 먼저 확인 후 푸시.
+도메인 DNS는 Cloudflare에서 관리합니다(`@` A 레코드 4개 → GitHub Pages, `www` CNAME → `acornriver.github.io`). 레포의 `CNAME` 파일은 지우지 않습니다.
+
+**주의**: `tower-visual` 푸시 = GitHub Pages 즉시 반영. 반드시 로컬에서 먼저 확인 후 푸시.
 
 ---
 
@@ -55,7 +57,7 @@ PATH=/opt/homebrew/opt/openjdk@21/bin:$PATH firebase emulators:start --only fire
   --kiosk \
   --disable-pinch \
   --overscroll-history-navigation=0 \
-  "https://acornriver.github.io/SVartTower/wall/"
+  "https://allearsare.love/wall/"
 ```
 
 또는 Safari 전체화면: 페이지 열기 → `F` 키로 전체화면 토글.
@@ -103,7 +105,7 @@ Firebase 웹 설정(`cloud/config.js`)은 공개 코드에 포함된다.
 보안은 **App Check (reCAPTCHA Enterprise)** 로 처리한다.  
 `cloud/firebase.js`의 `APP_CHECK_SITE_KEY`가 이 레포의 도메인(GitHub Pages URL)에 등록되어 있어야 한다.
 
-Firebase Console → App Check → 웹 앱 → 허용 도메인에 `acornriver.github.io` 추가.
+Firebase Console → App Check → 웹 앱 → 허용 도메인에 `allearsare.love` 추가.
 
 ---
 
@@ -121,7 +123,7 @@ Firebase Console → App Check → 웹 앱 → 허용 도메인에 `acornriver.g
 
 ## 관객용 모바일 QR 연결
 
-관객용 페이지는 같은 GitHub Pages 사이트의 첫 화면(`/`)입니다. 예전 `/mobile/` 주소도 첫 화면으로 넘어갑니다. SVart의 QR 표시 기능을 연결할 때 SVart의 `CloudConfig.MOBILE_URL`에 `https://acornriver.github.io/SVartTower/`을 설정하고, 검사 결과를 타워로 보낸 뒤 QR 대상 URL을 만듭니다.
+관객용 페이지는 같은 GitHub Pages 사이트의 첫 화면(`/`)입니다. 예전 `/mobile/` 주소도 첫 화면으로 넘어갑니다. SVart의 QR 표시 기능을 연결할 때 SVart의 `CloudConfig.MOBILE_URL`에 `https://allearsare.love/`을 설정하고, 검사 결과를 타워로 보낸 뒤 QR 대상 URL을 만듭니다.
 
 ```js
 const mobile = new URL(window.CloudConfig.MOBILE_URL);
