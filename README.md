@@ -1,6 +1,8 @@
 # 청감 타워 · SVartTower
 
-**[GitHub Pages에서 청감 타워 열기](https://acornriver.github.io/SVartTower/)**
+**[관객용 청감 타워](https://acornriver.github.io/SVartTower/)** · [전시장 TV 화면](https://acornriver.github.io/SVartTower/wall/)
+
+첫 화면(`/`)은 관객용 모바일이고, 전시장 TV는 `/wall/`에서 엽니다. 예전 `/mobile/` 주소는 첫 화면으로 넘어갑니다.
 
 2026 서울시립 북서울미술관 전시 사운드 프로젝트 《모든 귀는 [ ] 이다》의 전시장 TV 화면입니다. 관람객이 아이패드의 [SVart](https://github.com/acornriver/SVart)에서 청감 검사를 마치고 달팽이를 보내면, 타워에 실시간으로 나타납니다.
 
@@ -16,17 +18,16 @@ python3 -m http.server 8766
 
 | 모드 | 주소 |
 | --- | --- |
-| 가짜 데이터 | [localhost:8766/?mock=1](http://localhost:8766/?mock=1) |
-| 가짜 데이터와 15초마다 새 달팽이 도착 | [localhost:8766/?mock=1&arrive=15](http://localhost:8766/?mock=1&arrive=15) |
-| 실제 Firebase 피드 | [localhost:8766](http://localhost:8766/) |
+| TV 가짜 데이터 | [localhost:8766/wall/?mock=1](http://localhost:8766/wall/?mock=1) |
+| TV 가짜 데이터와 15초마다 새 달팽이 도착 | [localhost:8766/wall/?mock=1&arrive=15](http://localhost:8766/wall/?mock=1&arrive=15) |
+| TV 실제 Firebase 피드 | [localhost:8766/wall/](http://localhost:8766/wall/) |
+| 관객용 가짜 데이터 | [localhost:8766/?mock=1](http://localhost:8766/?mock=1) |
 
 ## 관객용 모바일
 
-[관객용 청감 타워](https://acornriver.github.io/SVartTower/mobile/) · [로컬 가짜 데이터 모드](http://localhost:8766/mobile/?mock=1)
-
 모바일 타워를 좌우로 돌리고 달팽이를 누르면 **청각 다변화 장치**가 열립니다. 세 사운드스케이프를 달팽이의 귀로 들을 수 있고, 내 청감 코드를 입력하면 재생 중 두 귀의 소리를 전환할 수 있습니다. `IWS-RLF`처럼 영문만 입력해도 달팽이가 그려집니다. QR에서 검사 기록을 불러오면 저장된 설정으로 듣고, 직접 입력한 코드는 가까운 값으로 재현합니다. 비교에는 공통 음량 기준을 사용합니다.
 
-## 화면 조작
+## TV 화면 조작
 
 | 조작 | 기능 |
 | --- | --- |

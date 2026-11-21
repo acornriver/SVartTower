@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="robots" content="noindex, nofollow">
+<title>청감 타워</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: #000; overflow: hidden;
+    position: fixed; inset: 0; cursor: none;
+    font-family: 'Noto Sans KR', system-ui, sans-serif;
+  }
+  #stage { position: fixed; inset: 0; }
+  canvas { display: block; }
+  body.debug { cursor: default; }
+  #debug-panel {
+    display: none;
+    position: fixed; top: 12px; right: 12px; width: min(460px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto;
+    background: rgba(12,13,18,0.9); color: #c8ccd8;
+    font: 12px/1.6 'Noto Sans KR', system-ui, sans-serif;
+    padding: 12px 14px; border-radius: 8px; z-index: 100;
+  }
+  #debug-panel.visible { display: block; }
+  .dbg-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 8px; }
+  .dbg-title { width: 52px; color: #8a8fa2; flex: none; }
+  #debug-panel button {
+    font: inherit; color: #c8ccd8; background: #23252e; border: 1px solid #3a3d4a;
+    border-radius: 4px; padding: 2px 8px; cursor: pointer;
+  }
+  #debug-panel button:hover { border-color: #8a8fa2; }
+  #debug-panel button.on { background: #e4e6ee; color: #14151a; border-color: #e4e6ee; }
+  #debug-panel select {
+    flex: 1; min-width: 0; padding: 3px 6px; color: inherit; font: inherit;
+    background: #23252e; border: 1px solid #3a3d4a; border-radius: 4px;
+  }
+  .dbg-snail-preview { width: 100%; height: auto; margin-bottom: 8px; background: #000; }
+  .dbg-snail-preview[hidden] { display: none; }
+  .dbg-stats { margin: 6px 0 8px; padding-top: 8px; border-top: 1px solid #2c2e38; white-space: pre-wrap; font: 11px/1.6 ui-monospace, 'IBM Plex Mono', monospace; }
+  .dbg-keys { padding-top: 8px; border-top: 1px solid #2c2e38; color: #9a9fb0; }
+  .dbg-keys b { display: inline-block; width: 64px; color: #e4e6ee; font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="debug-panel"></div>
+
+<!-- 의존성: 순서 중요 -->
+<script src="../lib/p5.min.js"></script>
+<script src="../cloud/schema.js"></script>
+<script src="../cloud/config.js"></script>
+<script src="../cloud/firebase.js"></script>
+<script src="../cloud/feed.js"></script>
+<script src="../mapping.js"></script>
+<script src="../snail-sticker.js"></script>
+<script src="../app.js"></script>
+<script src="../tower.js"></script>
+</body>
+</html>

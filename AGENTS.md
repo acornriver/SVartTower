@@ -23,11 +23,11 @@
 python3 -m http.server 8766   # SVart(8765)와 겹치지 않게
 
 # 가짜 데이터 모드 (Firebase 없이 개발)
-http://localhost:8766/?mock=1
-http://localhost:8766/?mock=1&arrive=15   # 15초마다 가짜 도착
+http://localhost:8766/wall/?mock=1
+http://localhost:8766/wall/?mock=1&arrive=15   # 15초마다 가짜 도착
 
 # 로컬 에뮬레이터 (SVart 폴더에서 먼저 에뮬레이터 실행 필요)
-http://localhost:8766/?emulator=1
+http://localhost:8766/wall/?emulator=1
 ```
 
 에뮬레이터 실행 (SVart 폴더에서):

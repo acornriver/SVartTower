@@ -23,14 +23,14 @@
 python3 -m http.server 8766   # SVart(8765)와 겹치지 않게
 
 # 가짜 데이터 모드 (Firebase 없이 개발)
-http://localhost:8766/?mock=1
-http://localhost:8766/?mock=1&arrive=15   # 15초마다 가짜 도착
+http://localhost:8766/wall/?mock=1
+http://localhost:8766/wall/?mock=1&arrive=15   # 15초마다 가짜 도착
 
 # 관객용 모바일 가짜 데이터 모드 (코드 자동 입력 예시)
-http://localhost:8766/mobile/?mock=1&code=IWS-RLF%2813.2k%2F6%29
+http://localhost:8766/?mock=1&code=IWS-RLF%2813.2k%2F6%29
 
 # 로컬 에뮬레이터 (SVart 폴더에서 먼저 에뮬레이터 실행 필요)
-http://localhost:8766/?emulator=1
+http://localhost:8766/wall/?emulator=1
 ```
 
 에뮬레이터 실행 (SVart 폴더에서):
@@ -150,3 +150,11 @@ config.js의 미확정 항목과 같음:
 - `mobile/tower-view.js`가 기존 `tower.js`의 입체 타워를 모바일에서 실행하고, 모바일이 이미 받아온 달팽이 목록을 연결한다.
 - 좌우로 밀면 타워를 돌리고, 보이는 달팽이를 누르면 해당 달팽이의 청각 다변화 장치로 이동한다. 키보드와 스크린 리더 사용자는 타워 아래 목록에서 같은 기능을 사용할 수 있다.
 - 화면에 표시되는 문구는 **청각 다변화 장치**, **내 귀로 듣기**, **이 달팽이의 귀로 듣기**로 통일했다.
+
+
+### 2026-11-21 — 관객용을 첫 화면으로, TV는 /wall/ (Claude)
+
+- 사용자 결정: 기기 자동 인식 대신 주소를 나눈다. 첫 화면(`/`)은 관객용 모바일, 전시장 TV는 `/wall/`이다(이름도 사용자가 고름). 공개 레포라 완전히 숨겨지지는 않으며 `noindex`만 넣었다.
+- `index.html`(관객용)은 공유 파일을 루트에서, 자기 파일을 `mobile/`에서 읽는다. 소리는 `mobile/audio/`. TV는 `wall/index.html`이 `../`로 같은 파일을 읽는다.
+- 예전 `/mobile/` 주소는 `mobile/index.html`이 쿼리를 유지한 채 첫 화면으로 넘긴다.
+- 남은 일: Mac Studio 키오스크 주소를 `/wall/`로 바꾸기, SVart의 `MOBILE_URL`을 첫 화면 주소로 바꾼 뒤 `cloud/` 다시 동기화.

@@ -9,7 +9,7 @@ git push -u origin main
 ```
 
 GitHub → 레포 Settings → Pages → Source: `main` 브랜치, `/ (root)`  
-저장 후 `https://acornriver.github.io/SVartTower/` 에서 접근 가능.
+저장 후 관객용은 `https://acornriver.github.io/SVartTower/`, 전시장 TV는 `https://acornriver.github.io/SVartTower/wall/` 에서 접근 가능.
 
 **주의**: `main` 푸시 = GitHub Pages 즉시 반영. 반드시 로컬에서 먼저 확인 후 푸시.
 
@@ -22,13 +22,16 @@ GitHub → 레포 Settings → Pages → Source: `main` 브랜치, `/ (root)`
 python3 -m http.server 8766
 
 # 가짜 데이터 모드
-open "http://localhost:8766/?mock=1"
+open "http://localhost:8766/wall/?mock=1"
 
 # 가짜 데이터 + 15초마다 도착
-open "http://localhost:8766/?mock=1&arrive=15"
+open "http://localhost:8766/wall/?mock=1&arrive=15"
 
 # 로컬 에뮬레이터 (SVart 폴더에서 먼저 에뮬레이터 실행)
-open "http://localhost:8766/?emulator=1"
+open "http://localhost:8766/wall/?emulator=1"
+
+# 관객용 화면
+open "http://localhost:8766/?mock=1"
 ```
 
 에뮬레이터 실행 (SVart 폴더에서):
@@ -52,7 +55,7 @@ PATH=/opt/homebrew/opt/openjdk@21/bin:$PATH firebase emulators:start --only fire
   --kiosk \
   --disable-pinch \
   --overscroll-history-navigation=0 \
-  "https://acornriver.github.io/SVartTower/"
+  "https://acornriver.github.io/SVartTower/wall/"
 ```
 
 또는 Safari 전체화면: 페이지 열기 → `F` 키로 전체화면 토글.
@@ -70,7 +73,7 @@ PATH=/opt/homebrew/opt/openjdk@21/bin:$PATH firebase emulators:start --only fire
 
 ```bash
 # 30분 메모리·무대 카운트 테스트
-open "http://localhost:8766/?mock=1&arrive=3"
+open "http://localhost:8766/wall/?mock=1&arrive=3"
 ```
 
 테스트 체크리스트:
@@ -118,7 +121,7 @@ Firebase Console → App Check → 웹 앱 → 허용 도메인에 `acornriver.g
 
 ## 관객용 모바일 QR 연결
 
-관객용 페이지는 같은 GitHub Pages 사이트의 `/mobile/`에 있습니다. SVart의 QR 표시 기능을 연결할 때 SVart의 `CloudConfig.MOBILE_URL`에 `https://acornriver.github.io/SVartTower/mobile/`을 설정하고, 검사 결과를 타워로 보낸 뒤 QR 대상 URL을 만듭니다.
+관객용 페이지는 같은 GitHub Pages 사이트의 첫 화면(`/`)입니다. 예전 `/mobile/` 주소도 첫 화면으로 넘어갑니다. SVart의 QR 표시 기능을 연결할 때 SVart의 `CloudConfig.MOBILE_URL`에 `https://acornriver.github.io/SVartTower/`을 설정하고, 검사 결과를 타워로 보낸 뒤 QR 대상 URL을 만듭니다.
 
 ```js
 const mobile = new URL(window.CloudConfig.MOBILE_URL);

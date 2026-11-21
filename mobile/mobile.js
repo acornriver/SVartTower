@@ -174,7 +174,7 @@ for (const key of ['own', 'other']) {
 
 function setTrack() {
   const track = get('track').value;
-  if (tracks.includes(track)) player.src = `audio/${track}.m4a`;
+  if (tracks.includes(track)) player.src = `mobile/audio/${track}.m4a`;
 }
 
 function formatTime(seconds) {
