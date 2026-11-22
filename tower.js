@@ -22,7 +22,10 @@ const CFG = {
   DEMO_MAX: 10,              // 자동으로 접속시키는 마릿수
 
   // 주파수(Hz) → 둘레길 높이(0 = 바닥·저음, 1 = 꼭대기·고음). 12000–19000Hz 구간을 크게 벌린다.
-  FREQ_MAP: [[20, 0.00], [12000, 0.30], [19000, 0.92], [20000, 1.00]],
+  // 11/22 리맵핑: 실제 관람객은 13~18 kHz에 몰려(운영 DB 25마리 중 15마리가 15~17 kHz) 한곳에 겹쳤음.
+  // 그 구간을 둘레길 대부분에 펼침. 8 kHz 아래는 SVart 검사가 재지 않는 영역이라 바닥 조금만 씀 (기준값은 Claude가 정함)
+  FREQ_MAP: [[20, 0.00], [8000, 0.06], [11000, 0.14], [13000, 0.24], [14000, 0.33], [15000, 0.45],
+             [16000, 0.58], [17000, 0.71], [18000, 0.82], [19000, 0.91], [20000, 1.00]],
 
   // 북서울미술관 팔레트 (낮은 소리 → 높은 소리). NEON 값만큼 채도·밝기를 끌어올려 쓴다.
   PALETTE: ['#B19E6B', '#808E30', '#5C6A36', '#8C7256', '#A8765C',
@@ -34,6 +37,7 @@ const CFG = {
   SNAIL_SIZE: 84,            // 달팽이 가로 크기 (타워 높이 600 기준)
   SNAIL_FACES_RIGHT: true,   // 넘어오는 달팽이 그림이 오른쪽을 보고 있으면 true
   ARRIVAL_SPREAD: 0.12,      // 도착 위치가 고역 한계 기준점에서 벗어날 수 있는 최대 거리 (둘레길 전체 = 1)
+  ARRIVAL_FRONT: 0.16,       // 새로 도착하는 달팽이는 기준점 ±이 범위 안에서 카메라 쪽(앞면)을 고름. 둘레길 약 한 바퀴라 어느 높이에서도 앞면이 있음 (11/22)
   WANDER: 0.07,              // 달팽이가 제자리에서 벗어나 돌아다니는 범위 (둘레길 전체 = 1)
   MAX_SNAILS: 40,
   PORTAL_SEC: 3.6,           // 포탈이 열렸다 닫히는 시간
@@ -541,10 +545,28 @@ function snailHome(hz, id) {
     Math.min(0.985, center + CFG.ARRIVAL_SPREAD), fraction);
 }
 
+// 새로 도착하는 달팽이: 기준 높이 근처에서 지금 카메라를 향한 자리(앞면)를 고름. 포탈이 열리는 동안 타워가 도는 만큼 조금 앞을 봄 (11/22)
+// project()에서 카메라 쪽 깊이는 r·sin(th + camA)라 th = π/2 − camA 일 때 가장 가까움
+function frontHome(hz) {
+  const center = clampN(1 - hzToUnit(hz), 0.015, 0.985);
+  const lo = Math.max(0.015, center - CFG.ARRIVAL_FRONT), hi = Math.min(0.985, center + CFG.ARRIVAL_FRONT);
+  const aim = Math.PI / 2 - (camA + (orbitOn ? CFG.ORBIT * CFG.PORTAL_SEC * 0.5 : 0));
+  let best = center, bestScore = -Infinity;
+  for (let i = 0; i <= 160; i++) {
+    const s = mixN(lo, hi, i / 160);
+    // 앞면을 먼저, 같으면 기준 높이에 가깝게, 이미 있는 달팽이와는 겹치지 않게 (연달아 도착해도 한 자리에 쌓이지 않음)
+    let crowd = 0;
+    for (const other of snails) { const d = Math.abs(other.home - s); if (d < 0.035) crowd += 1 - d / 0.035; }
+    const score = Math.cos(helix(s)[3] - aim) - Math.abs(s - center) * 0.6 - crowd * 0.45;
+    if (score > bestScore) { bestScore = score; best = s; }
+  }
+  return best;
+}
+
 function addSnail(hz, img, id, viaPortal) {
   snailSeq++;
   const snailId = id == null ? 'SNAIL_' + String(snailSeq).padStart(2, '0') : String(id);
-  const home = snailHome(hz, snailId);
+  const home = viaPortal ? frontHome(hz) : snailHome(hz, snailId);
   const sn = {
     id: snailId,
     hz, img, aspect: (img.height || 200) / (img.width || 300),
