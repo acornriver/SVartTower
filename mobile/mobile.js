@@ -20,11 +20,23 @@ let side = 'own';
 let inputRevision = 0;
 let previewFrame = null;
 let lastPaint = 0;
+let animalFilter = null; // 동물 칩으로 고른 동물 id (null = 전체)
 
-function status(id, message) {
+// 상태 문구는 번역 키로 남겨 두고 언어를 바꾸면 다시 채움
+function status(id, key) {
   const element = get(id);
-  element.textContent = message;
-  element.hidden = !message;
+  element.dataset.key = key || '';
+  element.textContent = key ? tr(key) : '';
+  element.hidden = !key;
+}
+
+// 청감 코드로 고른 동물 (cloud/snailAnimal.js, SVart 결과 화면과 같은 규칙)
+function animalOf(ear) {
+  return ear && window.SnailAnimal ? window.SnailAnimal.fromCode(ear.code) : null;
+}
+function earLabel(ear) {
+  const animal = animalOf(ear);
+  return animal ? window.SnailAnimal.earName(animal, mobileLang) : '';
 }
 
 function drawArt(ctx, art, now, withSlime) {
@@ -52,14 +64,15 @@ function paintPreview(now) {
   previewFrame = requestAnimationFrame(paintPreview);
 }
 
-function setOwn(result, message) {
+function setOwn(result, messageKey) {
   own = result;
   if (own?.earId && selected?.earId === own.earId) selected = null;
   ownArt = result ? new SnailArt(mapProfile(result.profile, result.v ?? result.codeVersion), 0, performance.now()) : null;
   get('own-specimen').hidden = !ownArt;
   get('own-code').textContent = result?.code ?? '';
+  refreshOwnAnimal();
   if (ownArt && previewFrame === null) previewFrame = requestAnimationFrame(paintPreview);
-  status('code-status', message);
+  status('code-status', messageKey);
   refreshGallery();
   refreshComparison();
 }
@@ -74,8 +87,7 @@ function useInput(commit = false) {
   if (commit && result) input.value = result.code;
   // QR로 온 코드면 QR에 담긴 달팽이 색상도 입힘. 색은 코드에 없어서, 검사 결과를 못 불러와도 아이패드와 같은 색이 나오게 함 (11/15)
   if (result && qrHue !== null && result.code === qrCode) result.profile.hueDeg = qrHue;
-  setOwn(result, result ? '입력한 코드로 달팽이를 그렸어요. 이 코드에 가까운 소리로 들을 수 있어요.' :
-    value && commit ? '코드 형식을 확인해 주세요. 예시 IWS-RLF 또는 IWS-RLF(13.2k/6)' : '');
+  setOwn(result, result ? 'codeDrawn' : value && commit ? 'codeInvalid' : '');
 }
 
 input.addEventListener('input', () => { inputRevision++; useInput(); });
@@ -97,8 +109,11 @@ function makeCard(ear) {
   const art = new SnailArt(mapProfile(ear.profile, ear.v ?? ear.codeVersion), 0, 0);
   drawArt(canvas.getContext('2d'), art, 0, false);
   const label = document.createElement('span');
-  label.textContent = ear.code;
-  button.append(canvas, label);
+  label.className = 'card-animal';
+  const code = document.createElement('span');
+  code.textContent = ear.code;
+  button.dataset.animal = animalOf(ear)?.id ?? '';
+  button.append(canvas, label, code);
   button.addEventListener('click', () => selectMobileEar(ear.earId));
   return button;
 }
@@ -120,9 +135,38 @@ function selectMobileEar(id) {
 
 function refreshGallery() {
   for (const [id, card] of gallery) {
-    card.hidden = id === own?.earId;
+    const ear = visibleEars.find(item => item.earId === id);
+    card.querySelector('.card-animal').textContent = earLabel(ear);
+    card.hidden = id === own?.earId || (animalFilter !== null && card.dataset.animal !== animalFilter);
     card.setAttribute('aria-pressed', String(selected?.earId === id));
   }
+  renderChips();
+}
+
+// 동물 칩: 지금 목록에 있는 동물만, 마릿수와 함께. 누르면 그 동물 귀만 보임 (11/22 원우리 작가 요청)
+function renderChips() {
+  const box = get('animal-chips');
+  if (!box || !window.SnailAnimal) return;
+  const others = visibleEars.filter(ear => ear.earId !== own?.earId);
+  const counts = new Map();
+  for (const ear of others) { const id = animalOf(ear)?.id; if (id) counts.set(id, (counts.get(id) || 0) + 1); }
+  if (animalFilter !== null && !counts.has(animalFilter)) animalFilter = null;
+  const chips = [{ id: null, text: `${tr('all')} ${others.length}` },
+    ...window.SnailAnimal.LIST.filter(a => counts.has(a.id)).map(a => ({ id: a.id, text: `${window.SnailAnimal.earName(a, mobileLang)} ${counts.get(a.id)}` }))];
+  box.replaceChildren(...chips.map(chip => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = chip.text;
+    button.setAttribute('aria-pressed', String(animalFilter === chip.id));
+    button.addEventListener('click', () => { animalFilter = chip.id; refreshGallery(); });
+    return button;
+  }));
+}
+
+function refreshOwnAnimal() {
+  const animal = animalOf(own);
+  get('own-animal').textContent = animal ? earLabel(own) : '';
+  get('own-animal-line').textContent = animal ? window.SnailAnimal.line(animal, mobileLang) : '';
 }
 
 function showEars(list) {
@@ -148,7 +192,7 @@ function showEars(list) {
   if (selected && !ids.has(selected.earId)) selected = null;
   refreshGallery();
   refreshComparison();
-  status('feed-status', visible.some(ear => ear.earId !== own?.earId) ? '' : '아직 비교할 달팽이가 없어요.');
+  status('feed-status', visible.some(ear => ear.earId !== own?.earId) ? '' : 'feedEmpty');
 }
 
 function refreshComparison() {
@@ -164,8 +208,10 @@ function refreshComparison() {
   updatePlayback();
   comparison.configure(own?.profile, selected?.profile, side);
   get('comparison').textContent = selected
-    ? `선택한 달팽이 ${selected.code}${own ? ' · 재생 중 두 귀의 소리를 바꿔 들어보세요.' : ' · 내 청감 코드를 입력하면 두 귀의 소리를 비교할 수 있어요.'}`
-    : '타워에서 달팽이를 고르면 그 귀로 들을 수 있어요.';
+    ? tr('compareSelected')(`${earLabel(selected)} · ${selected.code}`.replace(/^ · /, ''), !!own)
+    : tr('compareNone');
+  const selectedAnimal = animalOf(selected);
+  get('other-ear-label').textContent = selectedAnimal ? tr('otherEarNamed')(window.SnailAnimal.earName(selectedAnimal, mobileLang)) : tr('otherEar');
 }
 
 for (const key of ['own', 'other']) {
@@ -191,7 +237,7 @@ function updatePlayback() {
   get('elapsed').textContent = elapsed;
   get('duration').textContent = hasDuration ? formatTime(player.duration) : '–:––';
   seek.setAttribute('aria-valuetext', hasDuration ? `${elapsed} / ${formatTime(player.duration)}` : elapsed);
-  play.textContent = player.paused || player.ended ? '재생' : '일시정지';
+  play.textContent = player.paused || player.ended ? tr('play') : tr('pause');
 }
 
 function startPlayback() {
@@ -208,7 +254,7 @@ function playbackError(error) {
   if (error?.name === 'AbortError') return;
   if (!player.paused) player.pause();
   updatePlayback();
-  status('audio-status', '소리를 재생하지 못했어요. 다시 재생을 눌러 주세요.');
+  status('audio-status', 'audioError');
 }
 
 play.addEventListener('click', () => {
@@ -239,8 +285,8 @@ async function loadGalleryAndQR() {
   }
   const validId = window.EarSchema.ID_PATTERN.test(id ?? '');
   const revision = inputRevision;
-  if (validId) status('code-status', 'QR에서 검사 결과를 불러오는 중이에요.');
-  else if (id && !own) status('code-status', 'QR 주소를 확인하거나 청감 코드를 입력해 주세요.');
+  if (validId) status('code-status', 'qrLoading');
+  else if (id && !own) status('code-status', 'qrCheck');
 
   if (isMock) {
     let mockEars = [];
@@ -248,7 +294,7 @@ async function loadGalleryAndQR() {
       onInitial(list) { mockEars = list; showEars(mockEars); },
       onArrive(ear) { mockEars = [ear, ...mockEars].slice(0, 24); showEars(mockEars); },
     });
-    if (validId) status('code-status', '가짜 데이터 모드에서는 QR 검사 결과를 조회할 수 없어요.');
+    if (validId) status('code-status', 'qrMock');
     return;
   }
 
@@ -261,7 +307,7 @@ async function loadGalleryAndQR() {
     const recent = firestore.query(ears, firestore.where('hidden', '==', false),
       firestore.orderBy('createdAt', 'desc'), firestore.limit(24));
     firestore.onSnapshot(recent, snapshot => showEars(snapshot.docs.map(doc => ({ ...doc.data(), earId: doc.id }))),
-      () => status('feed-status', '달팽이 목록을 불러오지 못했어요. 잠시 뒤 새로고침해 주세요.'));
+      () => status('feed-status', 'feedError'));
     if (!validId) return;
     for (const wait of [0, 750, 1500]) {
       if (wait) await new Promise(resolve => setTimeout(resolve, wait));
@@ -271,19 +317,26 @@ async function loadGalleryAndQR() {
       const data = snapshot.data();
       if (data?.hidden === false && data.profile && typeof data.code === 'string' && data.code) {
         input.value = data.code;
-        setOwn({ ...data, earId: id }, 'QR에서 불러온 검사 결과를 사용 중이에요.');
+        setOwn({ ...data, earId: id }, 'qrLoaded');
         return;
       }
     }
-    status('code-status', own ? '검사 결과를 아직 찾을 수 없어 입력된 코드에 가까운 소리로 들을 수 있어요.' :
-      '검사 결과를 찾을 수 없어요. 잠시 뒤 새로고침하거나 청감 코드를 입력해 주세요.');
+    status('code-status', own ? 'qrMissingWithCode' : 'qrMissing');
   } catch {
-    if (!gallery.size) status('feed-status', '달팽이 목록을 불러오지 못했어요. 잠시 뒤 새로고침해 주세요.');
-    if (validId && revision === inputRevision) status('code-status', own
-      ? '검사 결과에 연결하지 못해 입력된 코드에 가까운 소리로 들을 수 있어요.'
-      : '검사 결과에 연결하지 못했어요. 청감 코드를 직접 입력할 수 있어요.');
+    if (!gallery.size) status('feed-status', 'feedError');
+    if (validId && revision === inputRevision) status('code-status', own ? 'qrOfflineWithCode' : 'qrOffline');
   }
 }
 
+// 언어: QR의 lang=en 또는 위쪽 KO / EN 버튼 (mobile/i18n.js)
+document.querySelectorAll('[data-lang-option]').forEach(button => button.addEventListener('click', () => setMobileLang(button.dataset.langOption)));
+window.addEventListener('mobilelangchange', () => {
+  for (const id of ['code-status', 'feed-status', 'audio-status']) status(id, get(id).dataset.key);
+  refreshOwnAnimal();
+  refreshGallery();
+  refreshComparison();
+});
+applyStaticCopy();
+status('feed-status', 'feedLoading');
 refreshComparison();
 loadGalleryAndQR();

@@ -159,3 +159,8 @@ config.js의 미확정 항목과 같음:
 - 예전 `/mobile/` 주소는 `mobile/index.html`이 쿼리를 유지한 채 첫 화면으로 넘긴다.
 - 남은 일: Mac Studio 키오스크 주소를 `/wall/`로 바꾸기, SVart의 `MOBILE_URL`을 첫 화면 주소로 바꾼 뒤 `cloud/` 다시 동기화.
 - 11/21 도메인 연결: `allearsare.love`(Cloudflare DNS). GitHub Pages는 `tower-visual` 브랜치에서 배포된다(`main` 아님). 관객용 `https://allearsare.love/`, TV `https://allearsare.love/wall/`. SVart `MOBILE_URL`도 이 주소로 바꿨다.
+
+## 11/22 동물 유형·영어판 (SVart에서 작업)
+- 휴대폰 화면(루트)에 청감 코드로 고른 동물 이름·한 줄 소개, '동물별로 귀 고르기' 칩, 선택한 귀 이름을 넣었습니다. 판정은 SVart가 원본인 `cloud/snailAnimal.js`(동기화 대상)입니다. 이모티콘은 쓰지 않습니다(사용자 지시).
+- 영어판: `mobile/i18n.js`. SVart QR에 `lang=en`이 붙으면 영어로 열리고, 위쪽 KO/EN 버튼으로도 바꿀 수 있습니다. 화면 문구는 `data-i18n` 키로 채웁니다.
+- 전시장 TV(`/wall/`) 이름표는 그대로 코드만 둡니다(사용자 선택).
