@@ -10,13 +10,14 @@ const previewCtx = preview.getContext('2d');
 const comparison = new EarComparison(player);
 const queryParams = new URLSearchParams(location.search);
 const isMock = queryParams.get('mock') === '1';
-const tracks = ['water', 'train-go', 'car-move'];
+// 곡 6개 (SVart 감상 화면과 같은 순서·이름). 작가 곡 3개는 곡이 오기 전까지 SVart와 같은 북서울 녹음을 임시로 씀
+const TRACK_FILES = { wonwoori: 'water-road', felix: 'car', collab: 'walk-stair', water: 'water', 'train-go': 'train-go', 'car-move': 'car-move' };
 const gallery = new Map();
 let visibleEars = [];
 let own = null;
 let ownArt = null;
 let selected = null;
-let side = 'own';
+let mix = 0; // 0 = 내 귀, 1 = 고른 달팽이의 귀
 let inputRevision = 0;
 let previewFrame = null;
 let lastPaint = 0;
@@ -126,7 +127,7 @@ function selectMobileEar(id) {
   const ear = visibleEars.find(item => item.earId === id);
   if (!ear) return;
   selected = ear;
-  side = 'other';
+  mix = 1; // 고르면 그 달팽이의 귀로 바로 들림. 슬라이더로 내 귀와 섞어 비교
   refreshGallery();
   refreshComparison();
   get('listen').scrollIntoView({ block: 'start' });
@@ -196,31 +197,33 @@ function showEars(list) {
 }
 
 function refreshComparison() {
-  if (!selected) side = 'own';
-  else if (!own) side = 'other';
-  get('own-listening').disabled = !own;
-  get('other-listening').disabled = !selected;
-  get('own-listening').setAttribute('aria-pressed', String(side === 'own'));
-  get('other-listening').setAttribute('aria-pressed', String(side === 'other'));
+  if (!selected) mix = 0;
+  else if (!own) mix = 1;
+  const slider = get('ear-mix');
+  slider.disabled = !own || !selected;
+  slider.value = String(mix);
   play.disabled = !own && !selected;
   if (play.disabled && !player.paused) player.pause();
   get('enter-code').hidden = !!own;
   updatePlayback();
-  comparison.configure(own?.profile, selected?.profile, side);
+  comparison.configure(own?.profile, selected?.profile, mix);
   get('comparison').textContent = selected
     ? tr('compareSelected')(`${earLabel(selected)} · ${selected.code}`.replace(/^ · /, ''), !!own)
     : tr('compareNone');
   const selectedAnimal = animalOf(selected);
-  get('other-ear-label').textContent = selectedAnimal ? tr('otherEarNamed')(window.SnailAnimal.earName(selectedAnimal, mobileLang)) : tr('otherEar');
+  const otherName = selectedAnimal ? window.SnailAnimal.earName(selectedAnimal, mobileLang) : tr('otherEar');
+  get('other-ear-label').textContent = otherName;
+  slider.setAttribute('aria-valuetext', tr('mixValue')(tr('myEar'), otherName, Math.round(mix * 100)));
 }
 
-for (const key of ['own', 'other']) {
-  get(`${key}-listening`).addEventListener('click', () => { side = key; refreshComparison(); });
-}
+get('ear-mix').addEventListener('input', event => {
+  mix = Number(event.target.value);
+  refreshComparison();
+});
 
 function setTrack() {
   const track = get('track').value;
-  if (tracks.includes(track)) player.src = `mobile/audio/${track}.m4a`;
+  if (TRACK_FILES[track]) player.src = `mobile/audio/${TRACK_FILES[track]}.m4a`;
 }
 
 function formatTime(seconds) {

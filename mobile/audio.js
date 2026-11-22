@@ -3,7 +3,7 @@ class EarComparison {
   constructor(media) {
     this.media = media;
     this.context = null;
-    this.side = 'own';
+    this.mix = 0; // 0 = 내 귀, 1 = 고른 달팽이의 귀 (11/22 슬라이더)
   }
 
   createChain(source, output) {
@@ -21,18 +21,18 @@ class EarComparison {
     return { filters, level, mix };
   }
 
-  configure(own, other, side) {
+  configure(own, other, mix) {
     this.own = own;
     this.other = other;
-    this.side = side;
+    this.mix = Math.max(0, Math.min(1, mix));
     if (!this.context) return;
     this.setFilters(this.chains.own, own);
     this.setFilters(this.chains.other, other);
     const time = this.context.currentTime;
-    for (const key of ['own', 'other']) {
-      const gain = this.chains[key].mix.gain;
-      gain.setTargetAtTime(key === side && this[key] ? 1 : 0, time, 0.015);
-    }
+    // 같은 크기로 섞이게 (equal-power). 한쪽 귀만 있으면 그 귀만
+    const m = !this.own ? 1 : !this.other ? 0 : this.mix;
+    const gains = { own: this.own ? Math.cos(m * Math.PI / 2) : 0, other: this.other ? Math.sin(m * Math.PI / 2) : 0 };
+    for (const key of ['own', 'other']) this.chains[key].mix.gain.setTargetAtTime(gains[key], time, 0.015);
   }
 
   setFilters(chain, profile) {
@@ -67,7 +67,7 @@ class EarComparison {
       output.gain.value = 0.23;
       output.connect(this.context.destination);
       this.chains = { own: this.createChain(source, output), other: this.createChain(source, output) };
-      this.configure(this.own, this.other, this.side);
+      this.configure(this.own, this.other, this.mix);
     }
     // iOS requires both calls to start within the tap event.
     return Promise.all([this.context.resume(), this.media.play()]);

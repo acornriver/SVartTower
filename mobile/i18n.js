@@ -23,10 +23,13 @@ const MOBILE_COPY = {
     qrOffline: '검사 결과에 연결하지 못했어요. 청감 코드를 직접 입력할 수 있어요.',
     back: '타워로 돌아가기', listenTitle: '청각 다변화 장치',
     compareNone: '타워나 동물 목록에서 달팽이를 고르면 그 귀로 들을 수 있어요.',
-    compareSelected: (who, hasOwn) => `선택한 달팽이: ${who}${hasOwn ? ' · 재생 중 두 귀의 소리를 바꿔 들어보세요.' : ' · 내 청감 코드를 입력하면 두 귀의 소리를 비교할 수 있어요.'}`,
-    enterCode: '내 청감 코드 입력', soundscape: '사운드스케이프',
-    water: '당현천 물소리', 'train-go': '중계역 지하철', 'car-move': '북서울미술관 앞 지나가는 차',
-    switchLabel: '들을 귀', ownEar: '내 귀로 듣기', otherEar: '이 달팽이의 귀로 듣기', otherEarNamed: ear => `${ear}로 듣기`,
+    compareSelected: (who, hasOwn) => `선택한 달팽이: ${who}${hasOwn ? ' · 재생하면서 슬라이더로 두 귀를 오가며 들어보세요.' : ' · 내 청감 코드를 입력하면 두 귀의 소리를 비교할 수 있어요.'}`,
+    enterCode: '내 청감 코드 입력', soundscape: '들을 소리',
+    groupArtists: '작가 곡', groupPlaces: '북서울 소리',
+    wonwoori: '원우리 <전극 응답>', felix: '펠릭스 쿠빈 <반짝이는 레지스터>', collab: '원우리 × 펠릭스 쿠빈 <레지스터 응답>',
+    water: '당현천 소리', 'train-go': '중계역 지하철 소리', 'car-move': '북서울미술관 앞 소리',
+    switchLabel: '들을 귀', myEar: '내 귀', otherEar: '이 달팽이 귀', compareHint: '← 비교하며 듣기 →',
+    mixValue: (mine, other, pct) => `${mine} ${100 - pct}% · ${other} ${pct}%`,
     play: '재생', pause: '일시정지', seek: '재생 위치', audioError: '소리를 재생하지 못했어요. 다시 재생을 눌러 주세요.',
     towerAria: '회전하는 청감 타워', exploreAria: '청감 타워 둘러보기', langLabel: '언어'
   },
@@ -50,10 +53,13 @@ const MOBILE_COPY = {
     qrOffline: 'Couldn’t reach your result. You can type your hearing code instead.',
     back: 'Back to the tower', listenTitle: 'Sound Variator',
     compareNone: 'Pick a snail on the tower or from the animal list to listen with its ears.',
-    compareSelected: (who, hasOwn) => `Selected: ${who}${hasOwn ? ' · Switch between the two while it plays.' : ' · Enter your hearing code to compare the two.'}`,
-    enterCode: 'Enter my hearing code', soundscape: 'Soundscape',
-    water: 'Danghyeoncheon Stream', 'train-go': 'Junggye Station subway', 'car-move': 'Cars outside Buk-Seoul Museum of Art',
-    switchLabel: 'Ears to listen with', ownEar: 'Listen with my ears', otherEar: 'Listen with this snail’s ears', otherEarNamed: ear => `Listen with the ${ear}`,
+    compareSelected: (who, hasOwn) => `Selected: ${who}${hasOwn ? ' · Slide between the two ears while it plays.' : ' · Enter your hearing code to compare the two.'}`,
+    enterCode: 'Enter my hearing code', soundscape: 'Sound',
+    groupArtists: 'Artists', groupPlaces: 'Sounds of Buk-Seoul',
+    wonwoori: 'WONWOORI, Adaptive Response', felix: 'Felix Kubin, Scintillating Registers', collab: 'WONWOORI × Felix Kubin, Register Response',
+    water: 'Sounds of Danghyeoncheon Stream', 'train-go': 'Sounds of Junggye Station subway', 'car-move': 'Sounds outside Buk-Seoul Museum of Art',
+    switchLabel: 'Ears to listen with', myEar: 'My ear', otherEar: 'This snail’s ear', compareHint: '← compare →',
+    mixValue: (mine, other, pct) => `${mine} ${100 - pct}% · ${other} ${pct}%`,
     play: 'Play', pause: 'Pause', seek: 'Playback position', audioError: 'Couldn’t play the sound. Please press play again.',
     towerAria: 'The rotating Hearing Tower', exploreAria: 'Explore the Hearing Tower', langLabel: 'Language'
   }
@@ -71,6 +77,7 @@ function applyStaticCopy() {
   document.title = tr('pageTitle');
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = tr(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-aria]').forEach(el => el.setAttribute('aria-label', tr(el.dataset.i18nAria)));
+  document.querySelectorAll('[data-i18n-label]').forEach(el => el.setAttribute('label', tr(el.dataset.i18nLabel)));
   document.querySelectorAll('[data-lang-option]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.langOption === mobileLang)));
 }
 

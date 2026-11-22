@@ -175,3 +175,24 @@ figcaption { display: grid; gap: .2rem; }
 .own-animal-line { color: var(--dim); font-family: var(--sans); font-size: .875rem; letter-spacing: 0; line-height: 1.5; }
 .site-header { flex-wrap: wrap; align-items: center; row-gap: .5rem; }
 .header-end { flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
+
+/* 11/22: 내 귀 ↔ 고른 달팽이 귀 슬라이더 (재생 위치 막대와 같은 결) */
+.ear-mix { margin-bottom: 1.75rem; }
+#ear-mix {
+  display: block; width: 100%; height: 2.75rem; min-height: 0; margin: 0; padding: 0; border: 0;
+  direction: ltr; appearance: none; -webkit-appearance: none; background: transparent;
+}
+#ear-mix::-webkit-slider-runnable-track { height: 1px; background: var(--ink); }
+#ear-mix::-moz-range-track { height: 1px; background: var(--ink); }
+#ear-mix::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; margin-top: -10px; border-radius: 50%; background: var(--ink); }
+#ear-mix::-moz-range-thumb { width: 20px; height: 20px; border: 0; border-radius: 50%; background: var(--ink); }
+#ear-mix:disabled::-webkit-slider-runnable-track { background: var(--line); }
+#ear-mix:disabled::-moz-range-track { background: var(--line); }
+#ear-mix:disabled::-webkit-slider-thumb { background: #77776f; }
+#ear-mix:disabled::-moz-range-thumb { background: #77776f; }
+.mix-labels { display: grid; grid-template-columns: 1fr auto 1fr; gap: .5rem; margin-top: -.35rem; font-family: var(--mono); font-size: .6875rem; letter-spacing: .04em; color: var(--dim); }
+.mix-labels span:first-child { color: var(--ink); }
+.mix-labels span:nth-child(2) { text-align: center; }
+.mix-labels span:last-child { text-align: right; color: var(--code); }
+optgroup { color: var(--dim); }
+option { color: var(--ink); background: var(--bg); }

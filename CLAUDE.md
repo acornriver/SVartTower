@@ -164,3 +164,4 @@ config.js의 미확정 항목과 같음:
 - 휴대폰 화면(루트)에 청감 코드로 고른 동물 이름·한 줄 소개, '동물별로 귀 고르기' 칩, 선택한 귀 이름을 넣었습니다. 판정은 SVart가 원본인 `cloud/snailAnimal.js`(동기화 대상)입니다. 이모티콘은 쓰지 않습니다(사용자 지시).
 - 영어판: `mobile/i18n.js`. SVart QR에 `lang=en`이 붙으면 영어로 열리고, 위쪽 KO/EN 버튼으로도 바꿀 수 있습니다. 화면 문구는 `data-i18n` 키로 채웁니다.
 - 전시장 TV(`/wall/`) 이름표는 그대로 코드만 둡니다(사용자 선택).
+- 휴대폰 듣기(11/22 2차): 곡 6개(SVart 감상 화면과 같은 순서·이름, 드롭다운). 작가 곡 3개는 곡이 오기 전까지 SVart와 같은 북서울 녹음 임시(`mobile/audio/water-road·car·walk-stair.m4a`, `mobile.js`의 `TRACK_FILES`). A/B 버튼 대신 '내 귀 ↔ 고른 달팽이 귀' 슬라이더(같은 크기로 섞임, `audio.js`의 `configure(own, other, mix)`). 고르면 그 달팽이 귀(오른쪽 끝)로 시작.

@@ -71,15 +71,23 @@
       <h2 id="listen-title" tabindex="-1" data-i18n="listenTitle">청각 다변화 장치</h2>
       <p id="comparison" class="muted">타워에서 달팽이를 고르면 그 귀로 들을 수 있어요.</p>
       <a class="text-link" id="enter-code" href="#own" data-i18n="enterCode">내 청감 코드 입력</a>
-      <label for="track" data-i18n="soundscape">사운드스케이프</label>
+      <label for="track" data-i18n="soundscape">들을 소리</label>
       <select id="track">
-        <option value="water" data-i18n="water">당현천 물소리</option>
-        <option value="train-go" data-i18n="train-go">중계역 지하철</option>
-        <option value="car-move" data-i18n="car-move">북서울미술관 앞 지나가는 차</option>
+        <optgroup label="작가 곡" data-i18n-label="groupArtists">
+          <option value="wonwoori" data-i18n="wonwoori">원우리 &lt;전극 응답&gt;</option>
+          <option value="felix" data-i18n="felix">펠릭스 쿠빈 &lt;반짝이는 레지스터&gt;</option>
+          <option value="collab" data-i18n="collab">원우리 × 펠릭스 쿠빈 &lt;레지스터 응답&gt;</option>
+        </optgroup>
+        <optgroup label="북서울 소리" data-i18n-label="groupPlaces">
+          <option value="water" data-i18n="water">당현천 소리</option>
+          <option value="train-go" data-i18n="train-go">중계역 지하철 소리</option>
+          <option value="car-move" data-i18n="car-move">북서울미술관 앞 소리</option>
+        </optgroup>
       </select>
-      <div class="listening-switch" role="group" aria-label="들을 귀" data-i18n-aria="switchLabel">
-        <button type="button" id="own-listening" aria-pressed="true"><span class="key" aria-hidden="true">A</span><span data-i18n="ownEar">내 귀로 듣기</span></button>
-        <button type="button" id="other-listening" aria-pressed="false" disabled><span class="key" aria-hidden="true">B</span><span id="other-ear-label">이 달팽이의 귀로 듣기</span></button>
+      <div class="ear-mix">
+        <label for="ear-mix" data-i18n="switchLabel">들을 귀</label>
+        <input id="ear-mix" type="range" min="0" max="1" step="0.01" value="0" disabled>
+        <div class="mix-labels" aria-hidden="true"><span data-i18n="myEar">내 귀</span><span data-i18n="compareHint">← 비교하며 듣기 →</span><span id="other-ear-label">이 달팽이 귀</span></div>
       </div>
       <audio id="player" playsinline preload="metadata"></audio>
       <div class="playback">
