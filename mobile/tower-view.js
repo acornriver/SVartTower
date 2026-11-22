@@ -5,6 +5,7 @@ CFG.DEFAULT_CONTROLS = false;
 CFG.VIEW_SIZE = 690;
 CFG.LABELS = false;
 CFG.BOXES = false;
+CFG.PART_MESH = 0; // 다변기 STL 부품(11/22): 휴대폰에서는 삼각형 결 없이 윤곽선만 (가볍게, 사용자 선택)
 
 let towerEars = [];
 let towerIsReady = false;
