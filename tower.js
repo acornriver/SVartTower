@@ -1113,9 +1113,9 @@ function draw() {
     const t = project([0, TW.H + 46, 0]);
     ctx.fillStyle = rgba(neonStops[9], 0.9);
     ctx.fillText('20 kHz · 높은 소리', t[0], Math.max(14 * S, t[1]));
-    ctx.textAlign = 'right';
+    ctx.textAlign = 'center';
     ctx.fillStyle = rgba(neonStops[1], 0.85);
-    ctx.fillText('20 Hz · 낮은 소리', width - 16 * S, height - 16 * S);
+    ctx.fillText('20 Hz · 낮은 소리', width / 2, height - 16 * S);
   }
   ctx.globalCompositeOperation = 'source-over';
   if (window.towerOverlay) { window.towerOverlay(now); }   // 포트: 무대 교체·디버그 (app.js)
