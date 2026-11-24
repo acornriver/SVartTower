@@ -82,7 +82,7 @@ function focusInfo(sn) {
 const MONO = '"SF Mono", ui-monospace, Menlo, Consolas, monospace';
 const SANS = '"Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif';
 function focusText(str, x, y, size, col, a, align = 'left', font = MONO, weight = 500) {
-  ctx.font = `${weight} ${size}px ${font}`;
+  ctx.font = `${weight} ${(size * uiS()).toFixed(1)}px ${font}`;
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
   ctx.fillStyle = rgba(col, a);
@@ -165,57 +165,59 @@ function focusPanel(sn, a) {
   const [bx, by, bw, bh] = sn.box;
   const col = colorAt(sn.s);
   const info = focusInfo(sn);
-  const pw = clampN(width * 0.24, 260, 460);
-  const artH = (pw - 48) * FOCUS.ART_H / FOCUS.ART_W;
-  const ph = 64 + artH + 150;
-  const px = width - pw - 40, py = (height - ph) / 2;
+  const S = uiS(), P = 24 * S;
+  const pw = Math.min(width * 0.26, 420 * S);
+  const artH = (pw - 2 * P) * FOCUS.ART_H / FOCUS.ART_W;
+  const ph = 60 * S + artH + 168 * S;
+  const px = width - pw - 36 * S, py = (height - ph) / 2;
 
   ctx.globalCompositeOperation = 'source-over';
   // 타워 위 달팽이 표시와 연결선
-  focusBrackets(bx - 6, by - 6, bw + 12, bh + 12, 9, FOCUS_INK, 0.9 * a);
-  const sx = bx + bw + 6, sy = by + bh / 2, ex = px - 28;
+  focusBrackets(bx - 6, by - 6, bw + 12, bh + 12, 9 * S, FOCUS_INK, 0.9 * a, 1.5 * Math.max(1, S * 0.8));
+  const sx = bx + bw + 6, sy = by + bh / 2, ex = px - 28 * S;
   if (sx < ex) {
-    focusLine(sx, sy, ex, sy, FOCUS_INK, 0.45 * a, 1, [2, 4]);
-    focusLine(ex, sy, px, py + 32, FOCUS_INK, 0.45 * a, 1, [2, 4]);
+    focusLine(sx, sy, ex, sy, FOCUS_INK, 0.5 * a, Math.max(1, S * 0.7), [2 * S, 4 * S]);
+    focusLine(ex, sy, px, py + 32 * S, FOCUS_INK, 0.5 * a, Math.max(1, S * 0.7), [2 * S, 4 * S]);
   }
 
   // 패널
   ctx.fillStyle = `rgba(0,0,0,${0.88 * a})`;
   ctx.fillRect(px, py, pw, ph);
-  focusBrackets(px, py, pw, ph, 18, FOCUS_INK, a);
-  focusText('SELECTED EAR', px + 24, py + 32, 11, FOCUS_INK, 0.55 * a);
-  focusText(info.time, px + pw - 24, py + 32, 11, FOCUS_INK, 0.55 * a, 'right');
+  focusBrackets(px, py, pw, ph, 18 * S, FOCUS_INK, a, 1.5 * Math.max(1, S * 0.8));
+  focusText('SELECTED EAR', px + P, py + 30 * S, 12, FOCUS_INK, 0.65 * a);
+  focusText(info.time, px + pw - P, py + 30 * S, 12, FOCUS_INK, 0.65 * a, 'right');
 
   // 그림
-  const ay = py + 56;
+  const ay = py + 52 * S;
   ctx.save();
-  ctx.beginPath(); ctx.rect(px + 24, ay, pw - 48, artH); ctx.clip();
-  for (let x = px + 24; x <= px + pw - 24; x += 16) for (let y = ay; y <= ay + artH; y += 16) {
+  ctx.beginPath(); ctx.rect(px + P, ay, pw - 2 * P, artH); ctx.clip();
+  const gs = 16 * S;
+  for (let x = px + P; x <= px + pw - P; x += gs) for (let y = ay; y <= ay + artH; y += gs) {
     ctx.fillStyle = rgba(FOCUS_INK, 0.08 * a); ctx.fillRect(x, y, 1, 1);
   }
-  focusDrawArt(sn, px + pw / 2, ay + artH / 2, pw - 48, a);
+  focusDrawArt(sn, px + pw / 2, ay + artH * 0.45, (pw - 2 * P) * 1.25, a);
   ctx.restore();
 
   // 정보
-  let y = ay + artH + 22;
-  focusLine(px + 24, y, px + pw - 24, y, FOCUS_INK, 0.2 * a);
-  y += 28;
-  focusText(info.code, px + 24, y, 20, CFG.LABEL_COLOR, a, 'left', MONO, 600);
-  y += 34;
-  focusText('귀', px + 24, y, 12, FOCUS_INK, 0.5 * a, 'left', SANS, 400);
-  focusText(info.animal || '—', px + pw - 24, y, 14, FOCUS_INK, 0.9 * a, 'right', SANS, 500);
-  y += 28;
-  focusText('고역 한계', px + 24, y, 12, FOCUS_INK, 0.5 * a, 'left', SANS, 400);
-  focusText(info.khz, px + pw - 24, y, 14, FOCUS_INK, 0.9 * a, 'right');
+  let y = ay + artH + 20 * S;
+  focusLine(px + P, y, px + pw - P, y, FOCUS_INK, 0.25 * a);
+  y += 30 * S;
+  focusText(info.code, px + P, y, 22, CFG.LABEL_COLOR, a, 'left', MONO, 600);
+  y += 38 * S;
+  focusText('귀', px + P, y, 14, FOCUS_INK, 0.6 * a, 'left', SANS, 400);
+  focusText(info.animal || '—', px + pw - P, y, 17, FOCUS_INK, a, 'right', SANS, 600);
+  y += 30 * S;
+  focusText('고역 한계', px + P, y, 14, FOCUS_INK, 0.6 * a, 'left', SANS, 400);
+  focusText(info.khz, px + pw - P, y, 17, FOCUS_INK, a, 'right', MONO, 500);
   // 8~20 kHz 막대
-  y += 20;
-  const x0 = px + 24, x1 = px + pw - 24, u = clampN((sn.hz - 8000) / 12000, 0, 1);
+  y += 22 * S;
+  const x0 = px + P, x1 = px + pw - P, u = clampN((sn.hz - 8000) / 12000, 0, 1);
   for (let x = x0; x < x1; x += 2) {
     ctx.fillStyle = rgba(colorAt(hzToUnit(8000 + 12000 * (x - x0) / (x1 - x0))), 0.5 * a);
-    ctx.fillRect(x, y, 1.5, 3);
+    ctx.fillRect(x, y, 1.5, 3 * S);
   }
   ctx.fillStyle = rgba(mul(col, 1.3), a);
-  ctx.fillRect(x0 + (x1 - x0) * u - 1.5, y - 5, 3, 13);
+  ctx.fillRect(x0 + (x1 - x0) * u - 1.5 * S, y - 5 * S, 3 * S, 13 * S);
 }
 
 /* ───── 시안 3: 확대 인셋 ───── */

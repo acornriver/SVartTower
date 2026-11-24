@@ -39,7 +39,7 @@ const CFG = {
   ARRIVAL_SPREAD: 0.12,      // 도착 위치가 고역 한계 기준점에서 벗어날 수 있는 최대 거리 (둘레길 전체 = 1)
   ARRIVAL_FRONT: 0.16,       // 새로 도착하는 달팽이는 기준점 ±이 범위 안에서 카메라 쪽(앞면)을 고름. 둘레길 약 한 바퀴라 어느 높이에서도 앞면이 있음 (11/22)
   WANDER: 0.07,              // 달팽이가 제자리에서 벗어나 돌아다니는 범위 (둘레길 전체 = 1)
-  MAX_SNAILS: 60,            // 타워에 한 번에 올라와 있는 달팽이 수 (11/22 사용자 지시: 40 → 70 → 60, 70은 너무 빽빽함)
+  MAX_SNAILS: 42,            // 타워에 한 번에 올라와 있는 달팽이 수 (사용자 지시: 40 → 70 → 60 → 11/24 42)
   PORTAL_SEC: 3.6,           // 포탈이 열렸다 닫히는 시간
   ORBIT: 0.05,               // 자동 회전 속도 (rad/s), 0 이면 정지
   // 이스터에그: 아날로그 다변기 부품이 바닥에 쓰레기처럼 떨어져 쌓인다
@@ -52,6 +52,7 @@ const CFG = {
   DEMO_CODES: true,          // 테스트 달팽이에 가짜 청감 코드를 붙여 미리 본다
   LABEL_COLOR: [240, 92, 62], // 청감 코드 글자색
   LABELS: true,              // "20 Hz · 낮은 소리" 글자
+  TEXT_SCALE: 1.6,           // TV 글자 크기 배율 (화면 높이 1080 기준). 11/24 사용자: TV에서 글자가 너무 작음
 };
 
 // 저사양 모드 (?lite=1): 오래된 맥에서 달팽이를 타워에 붙이는 비용을 줄인다.
@@ -80,7 +81,6 @@ const PERF = (() => {
   const q = new URLSearchParams(location.search);
   const m = Number(q.get('max'));
   if (q.has('max') && Number.isFinite(m)) CFG.MAX_SNAILS = m;
-  else if (PERF.LITE) CFG.MAX_SNAILS = 40;   // 저사양 모드: 사용자가 40마리까지 줄여도 된다고 함
 }
 
 /* ───────────── 타워 치수 ───────────── */
@@ -111,6 +111,8 @@ const clampN = (x, a, b) => Math.min(b, Math.max(a, x));
 const mixN = (a, b, t) => a + (b - a) * t;
 const sstep = (a, b, x) => { const t = clampN((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const rgba = (c, a) => 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + clampN(a, 0, 1).toFixed(3) + ')';
+// 글자·UI 크기 배율: 화면 짧은 변 1080을 1로 보고 CFG.TEXT_SCALE을 곱한다
+const uiS = () => clampN(Math.min(width, height) / 1080, 0.7, 2.5) * CFG.TEXT_SCALE;
 const mul = (c, k) => [Math.min(255, c[0] * k), Math.min(255, c[1] * k), Math.min(255, c[2] * k)];
 
 /* ============================================================
@@ -821,7 +823,7 @@ function drawPortal(sn, now) {
   // 접속 표시
   if (CFG.BOXES && t < 0.75) {
     ctx.globalCompositeOperation = 'lighter';
-    ctx.font = '10px ui-monospace, Menlo, Consolas, monospace';
+    ctx.font = (10 * uiS()).toFixed(1) + 'px ui-monospace, Menlo, Consolas, monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
     ctx.fillStyle = rgba(mul(col, 1.3), 0.9);
@@ -832,7 +834,7 @@ function drawPortal(sn, now) {
 
 function drawBoxes() {
   if (!CFG.BOXES) { return; }
-  ctx.font = '500 11px ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+  ctx.font = '500 ' + (11 * uiS()).toFixed(1) + 'px ui-monospace, "SF Mono", Menlo, Consolas, monospace';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'bottom';
   for (const sn of snails) {
@@ -1104,15 +1106,16 @@ function draw() {
 
   if (CFG.LABELS) {
     ctx.globalCompositeOperation = 'source-over';
-    ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
+    const S = uiS();
+    ctx.font = (11 * S).toFixed(1) + 'px ui-monospace, Menlo, Consolas, monospace';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
     const t = project([0, TW.H + 46, 0]);
     ctx.fillStyle = rgba(neonStops[9], 0.9);
-    ctx.fillText('20 kHz · 높은 소리', t[0], Math.max(14, t[1]));
+    ctx.fillText('20 kHz · 높은 소리', t[0], Math.max(14 * S, t[1]));
     ctx.textAlign = 'right';
     ctx.fillStyle = rgba(neonStops[1], 0.85);
-    ctx.fillText('20 Hz · 낮은 소리', width - 16, height - 16);
+    ctx.fillText('20 Hz · 낮은 소리', width - 16 * S, height - 16 * S);
   }
   ctx.globalCompositeOperation = 'source-over';
   if (window.towerOverlay) { window.towerOverlay(now); }   // 포트: 무대 교체·디버그 (app.js)
