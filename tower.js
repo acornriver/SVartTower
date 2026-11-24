@@ -54,6 +54,35 @@ const CFG = {
   LABELS: true,              // "20 Hz · 낮은 소리" 글자
 };
 
+// 저사양 모드 (?lite=1): 오래된 맥에서 달팽이를 타워에 붙이는 비용을 줄인다.
+// 각 값은 주소로 따로 바꿔 볼 수 있다: ?blend=screen|lighter|source-over  ?dpr=1|2  ?max=40
+const PERF = (() => {
+  const q = new URLSearchParams(location.search);
+  const lite = q.get('lite') === '1';
+  const num = (k, d) => (q.has(k) && Number.isFinite(+q.get(k)) ? +q.get(k) : d);
+  return {
+    LITE: lite,
+    SNAIL_BLEND: q.get('blend') || (lite ? 'lighter' : 'screen'),
+    DPR: num('dpr', lite ? 1 : Math.min(window.devicePixelRatio || 1, 2)),
+    HALO: num('halo', lite ? 0 : 1),     // 달팽이 발밑의 둥근 빛: 0 끔, 1 그라디언트, 2 미리 그린 빛 그림(저사양 맥에서는 1과 비슷하게 느림)
+    WIDE_GLOW: num('wideglow', lite ? 0 : 1) === 1,   // 잎 윤곽의 가장 넓은 번짐 선
+  };
+})();
+{
+  const q = new URLSearchParams(location.search);
+  if (typeof SNAIL_PERF !== 'undefined') {
+    SNAIL_PERF.blur = q.has('blur') ? q.get('blur') === '1' : !PERF.LITE;
+    SNAIL_PERF.frameMs = q.has('spritems') ? +q.get('spritems') : (PERF.LITE ? 150 : SNAIL_FRAME_MS);
+    SNAIL_PERF.loopFrames = q.has('loop') ? +q.get('loop') : (PERF.LITE ? 16 : 0);
+  }
+}
+{
+  const q = new URLSearchParams(location.search);
+  const m = Number(q.get('max'));
+  if (q.has('max') && Number.isFinite(m)) CFG.MAX_SNAILS = m;
+  else if (PERF.LITE) CFG.MAX_SNAILS = 40;   // 저사양 모드: 사용자가 40마리까지 줄여도 된다고 함
+}
+
 /* ───────────── 타워 치수 ───────────── */
 const TW = { H: 600, RT: 30, RB: 150, TURNS: 3.3, TH0: 0.6 };
 const CAM = { D: 1500, EL: 0.3, CY: 270 };
@@ -213,10 +242,12 @@ function glowLine(pts, col, w, alpha, closed) {
   ctx.moveTo(pts[0][0], pts[0][1]);
   for (let i = 1; i < pts.length; i++) { ctx.lineTo(pts[i][0], pts[i][1]); }
   if (closed) { ctx.closePath(); }
-  ctx.strokeStyle = rgba(col, alpha * 0.13);
-  ctx.lineWidth = w * 5;
-  ctx.stroke();
-  ctx.strokeStyle = rgba(col, alpha * 0.3);
+  if (PERF.WIDE_GLOW) {
+    ctx.strokeStyle = rgba(col, alpha * 0.13);
+    ctx.lineWidth = w * 5;
+    ctx.stroke();
+  }
+  ctx.strokeStyle = rgba(col, alpha * (PERF.WIDE_GLOW ? 0.3 : 0.4));
   ctx.lineWidth = w * 2.2;
   ctx.stroke();
   ctx.strokeStyle = rgba(mul(col, 1.25), alpha);
@@ -647,6 +678,25 @@ function snailBase(sn) {
   return [h[0], h[1] + 5, h[2]];
 }
 
+// 발밑 빛을 높이 색 20단계로 한 번씩만 그려 둔다 (저사양 모드)
+const haloCache = [];
+function haloSprite(s) {
+  const k = Math.round(clampN(s, 0, 1) * 19);
+  if (!haloCache[k]) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    const col = colorAt(k / 19);
+    grad.addColorStop(0, rgba(col, 1));
+    grad.addColorStop(1, rgba(col, 0));
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    haloCache[k] = c;
+  }
+  return haloCache[k];
+}
+
 function drawSnail(sn, now, back) {
   const base = snailBase(sn);
   const p = project(base);
@@ -661,11 +711,18 @@ function drawSnail(sn, now, back) {
 
   ctx.globalCompositeOperation = 'lighter';
   // 발밑의 빛
-  const halo = ctx.createRadialGradient(p[0], p[1] - h * 0.35, 0, p[0], p[1] - h * 0.35, w * 0.8);
-  halo.addColorStop(0, rgba(col, 0.3 * sn.reveal * dim));
-  halo.addColorStop(1, rgba(col, 0));
-  ctx.fillStyle = halo;
-  ctx.fillRect(p[0] - w, p[1] - h * 0.35 - w, w * 2, w * 2);
+  if (PERF.HALO === 2) {
+    const r = w * 0.8;
+    ctx.globalAlpha = 0.3 * sn.reveal * dim;
+    ctx.drawImage(haloSprite(sn.s), p[0] - r, p[1] - h * 0.35 - r, r * 2, r * 2);
+    ctx.globalAlpha = 1;
+  } else if (PERF.HALO) {
+    const halo = ctx.createRadialGradient(p[0], p[1] - h * 0.35, 0, p[0], p[1] - h * 0.35, w * 0.8);
+    halo.addColorStop(0, rgba(col, 0.3 * sn.reveal * dim));
+    halo.addColorStop(1, rgba(col, 0));
+    ctx.fillStyle = halo;
+    ctx.fillRect(p[0] - w * 0.8, p[1] - h * 0.35 - w * 0.8, w * 1.6, w * 1.6);
+  }
 
   ctx.save();
   ctx.translate(p[0], p[1]);
@@ -676,7 +733,7 @@ function drawSnail(sn, now, back) {
     if (sn.state === 'live') {
       sn.art.updateSlime(nowMs);
       ctx.save();
-      ctx.globalCompositeOperation = 'screen';
+      ctx.globalCompositeOperation = PERF.SNAIL_BLEND;
       ctx.globalAlpha = dim;
       ctx.translate(-w / 2, top);
       ctx.scale(w / SNAIL_ART.width, h / SNAIL_ART.height);
@@ -684,7 +741,7 @@ function drawSnail(sn, now, back) {
       ctx.restore();
     }
   }
-  ctx.globalCompositeOperation = 'screen';
+  ctx.globalCompositeOperation = PERF.SNAIL_BLEND;
   if (sn.reveal < 1) {
     // 접속 중: 가로 줄 단위로 어긋나며 나타난다
     const rows = 14;
@@ -957,7 +1014,7 @@ function stageSize() {
 
 function setup() {
   const sz = stageSize();
-  pixelDensity(Math.min(window.devicePixelRatio || 1, 2));
+  pixelDensity(PERF.DPR);
   const c = createCanvas(sz.w, sz.h);
   if (sz.host) { c.parent(sz.host); }
   ctx = drawingContext;

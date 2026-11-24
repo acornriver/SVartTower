@@ -4,6 +4,9 @@
  */
 const SNAIL_ART = { width: 360, height: 228, x: 163, ground: 221, radius: 46 };
 const SNAIL_FRAME_MS = 100;
+// 저사양 모드에서 tower.js가 바꾼다. frameMs: 그림 다시 그리는 간격, blur: 빛 번짐을 shadowBlur로 할지(false면 넓은 반투명 선으로 흉내)
+// loopFrames > 0: 움직임을 그만큼만 한 번씩 그려 두고 앞뒤로 되풀이한다(그 뒤로는 다시 그리지 않음).
+const SNAIL_PERF = { frameMs: SNAIL_FRAME_MS, blur: true, loopFrames: 0 };
 const HELIX = { bodyTwists: [3, 22], shellTwists: [4, 30], sep: 0.075, rungEvery: 3, spinSpeed: 1.4 };
 const ANTENNA = { look: 0.6, inSec: 0.35, holdSec: 0.6, outSec: 3.0, retract: 0.82, reach: 0.45 };
 const SLIME = { perSec: 14, lifeMs: 3200, speed: [18, 46], size: [2, 5] };
@@ -29,8 +32,14 @@ function tScopeStroke(ctx, pts, closed, weight, ink, glow) {
   };
   ctx.save();
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  ctx.shadowColor = _tRgba(glow, 0.8);
-  ctx.shadowBlur = 12 * weight * ctx.getTransform().a;
+  if (SNAIL_PERF.blur) {
+    ctx.shadowColor = _tRgba(glow, 0.8);
+    ctx.shadowBlur = 12 * weight * ctx.getTransform().a;
+  } else {
+    ctx.strokeStyle = _tRgba(glow, 0.12);
+    ctx.lineWidth = 18 * weight;
+    draw();
+  }
   ctx.strokeStyle = _tRgba(glow, 0.38);
   ctx.lineWidth = 8 * weight;
   draw();
@@ -91,7 +100,7 @@ class SnailArt {
     this.particles = [];
     this.nextSlime = null;
     this.renderSprite(now);
-    this.nextFrame = now + (seed % 1) * SNAIL_FRAME_MS;
+    this.nextFrame = now + (seed % 1) * SNAIL_PERF.frameMs;
   }
 
   body(timeMs) {
@@ -236,13 +245,35 @@ class SnailArt {
 
   renderSprite(now) {
     if (now < this.nextFrame) return;
-    this.nextFrame = now + SNAIL_FRAME_MS;
+    this.nextFrame = now + SNAIL_PERF.frameMs;
+    if (SNAIL_PERF.loopFrames > 1) { this.renderLooped(now); return; }
     const { ctx, canvas } = this;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     ctx.scale(0.5, 0.5);
     this.tailX = this.draw(ctx, now);
     ctx.restore();
+  }
+
+  renderLooped(now) {
+    const n = SNAIL_PERF.loopFrames, step = SNAIL_PERF.frameMs;
+    if (!this.frames) { this.frames = []; this.frameTail = []; }
+    const period = 2 * (n - 1);
+    let i = Math.max(0, Math.floor((now - this.born) / step)) % period;
+    if (i >= n) i = period - i;   // 앞으로 갔다 뒤로 돌아와서 끊기지 않는다
+    if (!this.frames[i]) {
+      const c = document.createElement('canvas');
+      c.width = this.canvas.width; c.height = this.canvas.height;
+      const g = c.getContext('2d');
+      g.scale(0.5, 0.5);
+      this.frameTail[i] = this.draw(g, this.born + i * step);
+      this.frames[i] = c;
+    }
+    if (this.shown === i) return;
+    this.shown = i;
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.drawImage(this.frames[i], 0, 0);
+    this.tailX = this.frameTail[i];
   }
 
   updateSlime(now) {

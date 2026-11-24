@@ -168,3 +168,9 @@ config.js의 미확정 항목과 같음:
 - 도착 높이·위치(11/22 2차): `CFG.FREQ_MAP`을 13~18 kHz가 둘레길 대부분을 쓰도록 리맵핑(운영 DB 기준 15~17 kHz 폭 0.157 → 0.231, 전체 표준편차 0.168 → 0.220). 새로 도착하는 달팽이(포탈)는 `frontHome()`이 기준 높이 ±0.16 안에서 지금 카메라 쪽 자리를 고르고, 이미 있는 달팽이와 겹치는 자리는 피함(가짜 데이터 19마리 중 16마리가 정면 쪽). 처음 불러오는 달팽이는 예전처럼 ID로 정한 자리. 기준값은 Claude가 정함.
 - 다변기 이스터에그(11/22 전달분 반영): 바닥 부품을 실제 시행착오 STL 47개 모양으로(`variator-parts.js` 데이터는 손으로 고치지 않음, `variator-drop.js`가 tower.js의 `addPart / dropPart / updateParts / drawPart`를 같은 이름으로 다시 정의, tower.js의 예전 부품 코드는 그대로 둠). TV(`wall/index.html`)와 휴대폰(루트 `index.html`, `defer`) 둘 다(사용자 선택). 휴대폰은 `mobile/tower-view.js`에서 `CFG.PART_MESH = 0`(윤곽선만). 데이터 다시 만들기는 `tools/variator/`(README 포함). 콘솔: `VariatorDrop.list()`, `VariatorDrop.drop(번호)`, `VariatorDrop.clear()`. 확인: 47개, P 키 낙하, `drop(3)` 4조각, 내려앉은 조각 모두 바닥에 닿음, 최대 18조각에서 TV·휴대폰 60fps(이 맥 헤드리스), 콘솔 오류 없음. 실제 TV 컴퓨터·휴대폰에서는 미확인.
 - 마릿수·피드(11/22 사용자 지시): `CFG.MAX_SNAILS` 40 → 70 → **60**(타워에 한 번에 올라와 있는 수, 70은 너무 빽빽하다는 사용자 지시), `CloudConfig.FEED_LIMIT` 500 → 150(TV가 처음 불러오는 최근 달팽이 수, SVart `cloud/config.js`가 원본). 가짜 데이터로 70마리까지 채워 60fps·메모리 증가 없음 확인(이 맥 헤드리스). 휴대폰 화면은 따로 최근 24마리만 읽어 그대로.
+
+## 11/24 저사양 모드 `?lite=1` (Claude, `low-spec` 브랜치)
+- 작가님 맥(macOS Mojave, 맥북 프로 13 인텔 i5 2.8GHz, 8GB)에서 `/wall/`이 약 5fps. 원인은 달팽이 그림을 100ms마다 다시 그리는 비용(타워에 붙이는 순간 그려져서 측정상 `drawImage`에 잡힘)과 레티나 2배 화면.
+- `/wall/?lite=1`: 화면 배율 1, 달팽이 움직임을 16장(150ms 간격)만 한 번 그려 두고 앞뒤로 되풀이(`SNAIL_PERF.loopFrames`), 빛 번짐을 shadowBlur 대신 넓은 반투명 선, 달팽이 발밑 둥근 빛 끔, 잎의 가장 넓은 번짐 선 끔, 최대 40마리. 기본 주소(`?lite` 없음)는 예전과 같다.
+- 하나씩 바꿔 보기: `?dpr=1|2 &halo=0|1|2 &wideglow=0|1 &loop=0|16 &spritems=150 &blur=0|1 &max=40 &blend=screen|lighter|source-over`.
+- 측정 도구 `tools/perf/bench.mjs`(헤드리스 Chrome, GPU 끄고 CPU 2.5배 느리게 = 원래 코드가 작가님 맥과 비슷한 4fps). 실제 데이터 34마리 기준 4.4fps → 30fps. 실제 작가님 맥에서는 미확인.
