@@ -8,6 +8,17 @@ CFG.TEXT_SCALE = 1;
 CFG.BOXES = false;
 CFG.PART_MESH = 0; // 다변기 STL 부품(11/22): 휴대폰에서는 삼각형 결 없이 윤곽선만 (가볍게, 사용자 선택)
 
+// 11/26 휴대폰 최적화 (TV 저사양 모드 ?lite=1과 같은 방법). 주소에 같은 이름을 붙이면 그 값이 우선.
+{
+  const q = new URLSearchParams(location.search);
+  if (!q.has('loop')) SNAIL_PERF.loopFrames = 16;        // 달팽이 움직임 16장만 그려 두고 앞뒤로 되풀이
+  if (!q.has('spritems')) SNAIL_PERF.frameMs = 150;
+  if (!q.has('blur')) SNAIL_PERF.blur = false;           // shadowBlur 대신 넓은 반투명 선
+  if (!q.has('wideglow')) PERF.WIDE_GLOW = false;
+  if (!q.has('halo')) PERF.HALO = 0;
+  if (!q.has('dpr')) PERF.DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+}
+
 let towerEars = [];
 let towerIsReady = false;
 let towerHasEars = false;
